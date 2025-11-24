@@ -1,0 +1,39 @@
+import os
+import sys
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
+def load_config():
+    """
+    Loads and validates configuration variables.
+    Returns a dictionary with config values.
+    Exits the program if critical variables are missing.
+    """
+    bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
+    credentials_path = os.getenv("GOOGLE_SHEETS_CREDENTIALS")
+
+    missing = []
+    if not bot_token:
+        missing.append("TELEGRAM_BOT_TOKEN")
+    if not credentials_path:
+        missing.append("GOOGLE_SHEETS_CREDENTIALS")
+    
+    if missing:
+        print(f"Error: Missing environment variables: {', '.join(missing)}")
+        print("Please check your .env file.")
+        sys.exit(1)
+        
+    # Check if credentials file exists
+    if not os.path.exists(credentials_path):
+        print(f"Error: Credentials file not found at: {credentials_path}")
+        sys.exit(1)
+
+    return {
+        "bot_token": bot_token,
+        "credentials_path": credentials_path
+    }
+
+# Load config on import to fail fast
+config = load_config()
