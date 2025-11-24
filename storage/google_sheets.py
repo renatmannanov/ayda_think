@@ -93,3 +93,23 @@ class GoogleSheetsStorage(BaseStorage):
             error_details = traceback.format_exc()
             print(f"Error checking access: {error_details}")
             return False, error_details
+
+    async def ensure_headers(self, spreadsheet_id: str):
+        """
+        Checks if the first row is empty and adds headers if needed.
+        """
+        await asyncio.to_thread(self._ensure_headers_sync, spreadsheet_id)
+
+    def _ensure_headers_sync(self, spreadsheet_id: str):
+        try:
+            sh = self.gc.open_by_key(spreadsheet_id)
+            worksheet = sh.sheet1
+            
+            # Check if A1 is empty
+            if not worksheet.acell('A1').value:
+                headers = ['ID', 'Telegram Message ID', 'Created At', 'Content', 'Tags', 'Reply To Message ID']
+                worksheet.update('A1:F1', [headers])
+        except Exception as e:
+            print(f"Error ensuring headers: {e}")
+            # We don't raise here to not block registration if something minor fails
+

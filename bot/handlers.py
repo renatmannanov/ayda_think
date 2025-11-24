@@ -78,6 +78,10 @@ async def register_sheet(update: Update, context: ContextTypes.DEFAULT_TYPE, spr
     
     if has_access:
         save_user(user_id, spreadsheet_id)
+        # Initialize headers
+        await status_msg.edit_text("⏳ Настраиваю заголовки таблицы...")
+        await storage.ensure_headers(spreadsheet_id)
+        
         await status_msg.edit_text(
             "✅ **Успешно!** Таблица подключена.\n\n"
             "Теперь просто пишите мне сообщения, и я буду сохранять их как заметки.\n"
