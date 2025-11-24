@@ -1,5 +1,6 @@
 import asyncio
 import gspread
+import logging
 from datetime import datetime
 from typing import Dict, Any
 from .base import BaseStorage
@@ -25,23 +26,44 @@ class GoogleSheetsStorage(BaseStorage):
         except Exception:
             return 'Unknown'
 
-    async def save_note(self, destination_id: str, note_data: Dict[str, Any]) -> str:
-        """
-        Saves a note to a specific Google Sheet.
-        
-        Args:
-            destination_id: The Google Spreadsheet ID.
-            note_data: Dict containing:
-                - message_id
-                - content
-                - tags (list)
-                - reply_to_message_id (optional)
-        
-        Returns:
-            The generated ID of the record.
-        """
-        # Run blocking network operations in a separate thread
-        return await asyncio.to_thread(self._save_note_sync, destination_id, note_data)
+    async def save_note(self, spreadsheet_id: str, note_data: Dict[str, Any]) -> str:
+        """Asynchronously save a note to Google Sheets."""
+        return await asyncio.to_thread(self._save_note_sync, spreadsheet_id, note_data)
+
+    async def update_note(self, spreadsheet_id: str, message_id: int, updated_content: str, updated_tags: list) -> bool:
+        """Asynchronously update a note in Google Sheets by message_id."""
+        return await asyncio.to_thread(self._update_note_sync, spreadsheet_id, message_id, updated_content, updated_tags)
+
+    def _update_note_sync(self, spreadsheet_id: str, message_id: int, updated_content: str, updated_tags: list) -> bool:
+        """Find and update a note by Telegram message_id."""
+        try:
+            sh = self.gc.open_by_key(spreadsheet_id)
+            worksheet = sh.sheet1
+            
+            # Find the row with matching Telegram Message ID (column B)
+            all_values = worksheet.get_all_values()
+            
+            for row_idx, row in enumerate(all_values[1:], start=2):  # Skip header, start from row 2
+                if len(row) > 1 and row[1] == str(message_id):  # Column B (index 1)
+                    # Formula Injection Protection
+                    if updated_content and updated_content.startswith(('=', '+', '-', '@')):
+                        updated_content = "'" + updated_content
+                    
+                    tags_str = ", ".join(updated_tags)
+                    
+                    # Update Content (column D) and Tags (column E)
+                    worksheet.update_cell(row_idx, 4, updated_content)  # Column D
+                    worksheet.update_cell(row_idx, 5, tags_str)  # Column E
+                    
+                    logging.info(f"Updated message {message_id} in row {row_idx}")
+                    return True
+            
+            logging.warning(f"Message {message_id} not found in spreadsheet")
+            return False
+            
+        except Exception as e:
+            logging.error(f"Error updating note: {e}")
+            return False
 
     def _save_note_sync(self, spreadsheet_id: str, note_data: Dict[str, Any]) -> str:
         """Synchronous implementation of save_note."""
@@ -131,4 +153,3 @@ class GoogleSheetsStorage(BaseStorage):
         except Exception as e:
             print(f"Error ensuring headers: {e}")
             # We don't raise here to not block registration if something minor fails
-

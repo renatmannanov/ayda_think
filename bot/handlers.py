@@ -53,6 +53,28 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Otherwise, treat as note (including forwards)
     await save_note(update, context)
 
+async def handle_edited_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Handle edited messages - update the corresponding row in Google Sheets.
+    """
+    storage: GoogleSheetsStorage = context.bot_data['storage']
+    user_id = update.effective_user.id
+    spreadsheet_id = get_user_spreadsheet(user_id)
+    
+    if not spreadsheet_id:
+        return  # Silently ignore if user hasn't registered
+    
+    edited_msg = update.edited_message
+    message_id = edited_msg.message_id
+    new_content = edited_msg.text or edited_msg.caption or ""
+    new_tags = [word for word in new_content.split() if word.startswith('#')]
+    
+    try:
+        await storage.update_note(spreadsheet_id, message_id, new_content, new_tags)
+        # Note: Telegram API doesn't support reactions on edited messages
+    except Exception as e:
+        logging.error(f"Error handling edited message: {e}")
+
 async def register_sheet(update: Update, context: ContextTypes.DEFAULT_TYPE, spreadsheet_id: str):
     storage: GoogleSheetsStorage = context.bot_data['storage']
     user_id = update.effective_user.id
