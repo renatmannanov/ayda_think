@@ -61,15 +61,23 @@ class GoogleSheetsStorage(BaseStorage):
             
             tags_str = ", ".join(note_data.get('tags', []))
             reply_to = note_data.get('reply_to_message_id', '')
+            message_type = note_data.get('message_type', 'general')
+            source_chat_id = note_data.get('source_chat_id', '')
+            source_chat_link = note_data.get('source_chat_link', '')
+            telegram_username = note_data.get('telegram_username', '')
             
-            # Row: id | telegram_message_id | date_created | content | tags | reply_to_message_id
+            # Row: id | telegram_message_id | date_created | content | tags | reply_to_message_id | message_type | source_chat_id | source_chat_link | telegram_username
             row = [
                 record_id,
                 str(msg_id),
                 created_at,
                 content,
                 tags_str,
-                str(reply_to) if reply_to else ''
+                str(reply_to) if reply_to else '',
+                message_type,
+                str(source_chat_id) if source_chat_id else '',
+                source_chat_link,
+                telegram_username
             ]
             
             worksheet.append_row(row, table_range='A1')
@@ -107,8 +115,19 @@ class GoogleSheetsStorage(BaseStorage):
             
             # Check if A1 is empty
             if not worksheet.acell('A1').value:
-                headers = ['ID', 'Telegram Message ID', 'Created At', 'Content', 'Tags', 'Reply To Message ID']
-                worksheet.update('A1:F1', [headers])
+                headers = [
+                    'ID', 
+                    'Telegram Message ID', 
+                    'Created At', 
+                    'Content', 
+                    'Tags', 
+                    'Reply To Message ID',
+                    'Message Type',
+                    'Source Chat ID',
+                    'Source Chat Link',
+                    'Telegram Username'
+                ]
+                worksheet.update('A1:J1', [headers])
         except Exception as e:
             print(f"Error ensuring headers: {e}")
             # We don't raise here to not block registration if something minor fails

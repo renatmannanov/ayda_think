@@ -58,3 +58,6 @@ Columns: `id | telegram_message_id | date_created | content | tags | reply_to_me
 - **Formula Injection:** All content starting with `=`, `+`, `-`, `@` MUST be escaped with a leading `'`.
 - **Rate Limiting:** Limit user messages to 1 per 3 seconds to prevent API quota exhaustion.
 - **Access Control:** Public bot (no allowlist).
+
+## 8. Development Environment
+- **Windows Console:** NEVER use emojis or special Unicode characters in `print()` statements. Use `logging` module or ASCII-only text to avoid `charmap` codec errors.

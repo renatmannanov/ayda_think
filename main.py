@@ -23,8 +23,11 @@ def main():
     # Register handlers
     application.add_handler(CommandHandler("start", start))
     
-    # Handle all text messages (filter out commands)
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    # Handle all messages (text, forwards, media with captions)
+    application.add_handler(MessageHandler(
+        (filters.TEXT | filters.CAPTION | filters.FORWARDED) & ~filters.COMMAND, 
+        handle_message
+    ))
     
     print("Bot is running (python-telegram-bot)...")
     application.run_polling()
