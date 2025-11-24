@@ -153,3 +153,20 @@ class GoogleSheetsStorage(BaseStorage):
         except Exception as e:
             print(f"Error ensuring headers: {e}")
             # We don't raise here to not block registration if something minor fails
+
+    def _get_all_notes_sync(self, spreadsheet_id: str) -> list:
+        """Get all notes from a spreadsheet (excluding header row)."""
+        try:
+            sh = self.gc.open_by_key(spreadsheet_id)
+            worksheet = sh.sheet1
+            
+            # Get all values
+            all_values = worksheet.get_all_values()
+            
+            # Return all rows except header (row 0)
+            return all_values[1:] if len(all_values) > 1 else []
+            
+        except Exception as e:
+            logging.error(f"Error fetching notes: {e}")
+            return []
+
