@@ -122,10 +122,6 @@ async def get_notes(user_id: Optional[int] = Query(None)):
             if len(row) >= 9:
                 status = row[10] if len(row) > 10 else "new"
                 
-                # Filter out archived and done
-                if status in ["archived", "done"]:
-                    continue
-                
                 note = Note(
                     id=row[0],
                     telegram_message_id=row[1],

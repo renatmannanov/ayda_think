@@ -6,11 +6,68 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Ayda Think Notes</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <link rel="stylesheet" href="styles.css?v=6">
+    <link rel="stylesheet" href="styles.css?v=10">
 </head>
 
 <body>
     <div class="container">
+        <!-- Stats Bar -->
+        <div class="stats-bar">
+            <div class="stats-group">
+                <div class="stat-item">📝 <span id="statTotal">0</span></div>
+                <div class="stat-item">🎯 <span id="statFocus">0</span></div>
+                <div class="stat-item">✅ <span id="statDone">0</span></div>
+                <div class="stat-item">📦 <span id="statArchive">0</span></div>
+            </div>
+            <button class="btn-filter-icon" id="btnFilterToggle">
+                <span class="icon">🎚️</span>
+                <span class="filter-badge" id="filterBadge"></span>
+            </button>
+        </div>
+
+        <!-- Filter Overlay (Hidden by default) -->
+        <div class="filter-overlay" id="filterOverlay" style="display: none;">
+            <div class="filter-content">
+                <div class="filter-header">
+                    <h3>Filters</h3>
+                    <button class="btn-close-filter" id="btnCloseFilter">✕</button>
+                </div>
+
+                <div class="filter-section">
+                    <h4>Date</h4>
+                    <div class="date-selectors">
+                        <select id="filterYear" class="filter-select">
+                            <option value="">Year</option>
+                        </select>
+                        <select id="filterMonth" class="filter-select">
+                            <option value="">Month</option>
+                            <option value="0">January</option>
+                            <option value="1">February</option>
+                            <option value="2">March</option>
+                            <option value="3">April</option>
+                            <option value="4">May</option>
+                            <option value="5">June</option>
+                            <option value="6">July</option>
+                            <option value="7">August</option>
+                            <option value="8">September</option>
+                            <option value="9">October</option>
+                            <option value="10">November</option>
+                            <option value="11">December</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="filter-section">
+                    <h4>Tags</h4>
+                    <div class="tags-list" id="filterTagsList">
+                        <!-- Tags injected here -->
+                    </div>
+                </div>
+
+                <button class="btn-apply-filters" id="btnApplyFilters">Apply Filters</button>
+            </div>
+        </div>
+
         <!-- Date Pill -->
         <div class="date-pill" id="datePill">Loading...</div>
 
@@ -37,7 +94,7 @@
         </div>
     </div>
 
-    <script src="app.js?v=6"></script>
+    <script src="app.js?v=10"></script>
 </body>
 
 </html>
