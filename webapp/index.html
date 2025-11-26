@@ -1,39 +1,43 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Ayda Think</title>
-    <link rel="stylesheet" href="styles.css">
+    <title>Ayda Think Notes</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link rel="stylesheet" href="styles.css?v=6">
 </head>
+
 <body>
     <div class="container">
+        <!-- Date Pill -->
+        <div class="date-pill" id="datePill">Loading...</div>
+
+        <!-- Message Card -->
         <div class="card" id="noteCard">
-            <div class="card-header">
-                <span class="date-time" id="dateTime">Loading...</span>
-                <span class="note-type" id="noteType">general</span>
-            </div>
-            
             <div class="card-content">
+                <div class="note-type" id="noteType">general</div>
                 <div class="tags" id="tags"></div>
                 <div class="note-text" id="noteText">Loading notes...</div>
             </div>
-            
+
             <div class="action-buttons">
                 <button class="btn btn-done">Done</button>
                 <button class="btn btn-flow">Flow</button>
                 <button class="btn btn-focus">Focus</button>
                 <button class="btn btn-reply">Reply</button>
             </div>
-            
-            <div class="navigation-buttons">
-                <button class="btn-nav btn-archive">Archive</button>
-                <button class="btn-nav btn-next" id="nextBtn">Next →</button>
-            </div>
+        </div>
+
+        <!-- Navigation Buttons (outside card) -->
+        <div class="navigation-buttons">
+            <button class="btn-nav btn-archive">Archive</button>
+            <button class="btn-nav btn-next" id="nextBtn">Next →</button>
         </div>
     </div>
-    
-    <script src="app.js"></script>
+
+    <script src="app.js?v=6"></script>
 </body>
+
 </html>

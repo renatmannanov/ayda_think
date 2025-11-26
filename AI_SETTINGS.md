@@ -61,3 +61,7 @@ Columns: `id | telegram_message_id | date_created | content | tags | reply_to_me
 
 ## 8. Development Environment
 - **Windows Console:** NEVER use emojis or special Unicode characters in `print()` statements. Use `logging` module or ASCII-only text to avoid `charmap` codec errors.
+- **HTML/CSS Integrity:** 
+    - NEVER delete the `<head>` section or `<!DOCTYPE html>` declaration.
+    - For small files (< 300 lines), PREFER `write_to_file` (rewrite entire file) over `replace_file_content` to avoid accidental deletion of context or breaking structure.
+    - ALWAYS verify that critical classes (like `.card`) and tags (`<html>`, `<body>`) exist after editing.

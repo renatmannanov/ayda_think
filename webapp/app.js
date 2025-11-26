@@ -47,7 +47,8 @@ function loadDemoData() {
             created_at: '2024-11-24T14:30:00',
             content: 'Это тестовая заметка с тегами',
             tags: '#важно, #работа',
-            message_type: 'general'
+            message_type: 'general',
+            status: 'focus'
         },
         {
             id: '20241124143100_124',
@@ -55,7 +56,8 @@ function loadDemoData() {
             created_at: '2024-11-24T14:31:00',
             content: 'Форвардированное сообщение из канала',
             tags: '#новости',
-            message_type: 'forwarded'
+            message_type: 'forwarded',
+            status: 'new'
         }
     ];
     displayNote(currentIndex);
@@ -67,14 +69,14 @@ function displayNote(index) {
 
     const note = notes[index];
 
-    // Update date/time
+    // Update date pill
     const date = new Date(note.created_at);
-    const dateTimeEl = document.getElementById('dateTime');
-    dateTimeEl.textContent = formatDateTime(date);
+    const datePillEl = document.getElementById('datePill');
+    datePillEl.textContent = formatDatePill(date);
 
     // Update note type
     const noteTypeEl = document.getElementById('noteType');
-    noteTypeEl.textContent = note.message_type;
+    noteTypeEl.textContent = note.message_type || 'General';
     noteTypeEl.className = `note-type ${note.message_type}`;
 
     // Update tags
@@ -91,33 +93,36 @@ function displayNote(index) {
     // Update note text
     const noteTextEl = document.getElementById('noteText');
     noteTextEl.textContent = note.content;
+
+    // Update Focus button state
+    const focusBtn = document.querySelector('.btn-focus');
+    if (note.status === 'focus') {
+        focusBtn.textContent = 'Unfocus';
+        focusBtn.style.fontWeight = 'bold';
+    } else {
+        focusBtn.textContent = 'Focus';
+        focusBtn.style.fontWeight = 'normal';
+    }
 }
 
-// Format date/time
-function formatDateTime(date) {
+// Format date for the pill (e.g., "May 17" or "Today")
+function formatDatePill(date) {
     const today = new Date();
     const isToday = date.toDateString() === today.toDateString();
 
-    const timeStr = date.toLocaleTimeString('ru-RU', {
-        hour: '2-digit',
-        minute: '2-digit'
-    });
-
     if (isToday) {
-        return `Сегодня, ${timeStr}`;
+        return 'Today';
     }
 
-    const dateStr = date.toLocaleDateString('ru-RU', {
-        day: 'numeric',
-        month: 'short'
+    return date.toLocaleDateString('en-US', {
+        month: 'long',
+        day: 'numeric'
     });
-
-    return `${dateStr}, ${timeStr}`;
 }
 
 // Show empty state
 function showEmptyState() {
-    document.getElementById('dateTime').textContent = '';
+    document.getElementById('datePill').style.display = 'none';
     document.getElementById('noteType').textContent = '';
     document.getElementById('tags').innerHTML = '';
     document.getElementById('noteText').textContent = 'Нет заметок для отображения';
@@ -134,25 +139,100 @@ document.getElementById('nextBtn').addEventListener('click', () => {
     }
 });
 
-// Action button placeholders
-document.querySelectorAll('.action-buttons .btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-        const action = e.target.textContent.toLowerCase();
-        tg.showAlert(`Action: ${action} (coming soon)`);
+// Update note status
+async function updateStatus(noteId, newStatus) {
+    try {
+        const userId = tg.initDataUnsafe?.user?.id || new URLSearchParams(window.location.search).get('user_id') || 'demo';
 
-        if (tg.HapticFeedback) {
-            tg.HapticFeedback.impactOccurred('medium');
+        // Optimistic update
+        const noteIndex = notes.findIndex(n => n.id === noteId);
+        if (noteIndex === -1) return;
+
+        const note = notes[noteIndex];
+        note.status = newStatus;
+
+        // If status is archived or done, remove from list
+        if (['archived', 'done'].includes(newStatus)) {
+            notes.splice(noteIndex, 1);
+            // Adjust currentIndex if needed
+            if (currentIndex >= notes.length) {
+                currentIndex = Math.max(0, notes.length - 1);
+            }
         }
-    });
+
+        // Re-render
+        if (notes.length > 0) {
+            displayNote(currentIndex);
+        } else {
+            showEmptyState();
+        }
+
+        // Send to API
+        if (userId !== 'demo') {
+            const response = await fetch(`/api/notes/${noteId}/status`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    status: newStatus,
+                    user_id: userId
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to update status');
+            }
+        }
+
+    } catch (error) {
+        console.error('Error updating status:', error);
+        tg.showAlert('Error updating status');
+    }
+}
+
+// Action buttons
+document.querySelector('.btn-done').addEventListener('click', () => {
+    if (notes.length === 0) return;
+    const note = notes[currentIndex];
+    updateStatus(note.id, 'done');
+    if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
 });
 
-// Archive button placeholder
-document.querySelector('.btn-archive').addEventListener('click', () => {
-    tg.showAlert('Archive (coming soon)');
+document.querySelector('.btn-flow').addEventListener('click', () => {
+    if (notes.length === 0) return;
+    const note = notes[currentIndex];
+    updateStatus(note.id, 'flow');
+    if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+});
 
-    if (tg.HapticFeedback) {
-        tg.HapticFeedback.impactOccurred('medium');
-    }
+document.querySelector('.btn-focus').addEventListener('click', () => {
+    if (notes.length === 0) return;
+    const note = notes[currentIndex];
+    const newStatus = note.status === 'focus' ? '' : 'focus';
+    updateStatus(note.id, newStatus);
+    if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+});
+
+document.querySelector('.btn-reply').addEventListener('click', () => {
+    if (notes.length === 0) return;
+
+    // Close WebApp. User is back in chat.
+    // Ideally we would trigger a reply, but WebApp API limitations apply.
+    tg.close();
+});
+
+// Archive button
+document.querySelector('.btn-archive').addEventListener('click', () => {
+    if (notes.length === 0) return;
+
+    tg.showConfirm("Archive this note?", (confirmed) => {
+        if (confirmed) {
+            const note = notes[currentIndex];
+            updateStatus(note.id, 'archived');
+            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('heavy');
+        }
+    });
 });
 
 // Initialize
