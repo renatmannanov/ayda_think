@@ -133,7 +133,7 @@ class GoogleSheetsStorage(BaseStorage):
             source_chat_id = note_data.get('source_chat_id', '')
             source_chat_link = note_data.get('source_chat_link', '')
             telegram_username = note_data.get('telegram_username', '')
-            status = 'new'
+            status = ''
             
             # Row: id | telegram_message_id | date_created | content | tags | reply_to_message_id | message_type | source_chat_id | source_chat_link | telegram_username | status
             row = [

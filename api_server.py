@@ -23,7 +23,7 @@ class Note(BaseModel):
     source_chat_id: Optional[str] = None
     source_chat_link: Optional[str] = None
     telegram_username: Optional[str] = None
-    status: Optional[str] = "new"
+    status: Optional[str] = ""
 
 class NotesResponse(BaseModel):
     notes: List[Note]
@@ -120,7 +120,7 @@ async def get_notes(user_id: Optional[int] = Query(None)):
         notes = []
         for row in notes_data:
             if len(row) >= 9:
-                status = row[10] if len(row) > 10 else "new"
+                status = row[10] if len(row) > 10 else ""
                 
                 note = Note(
                     id=row[0],

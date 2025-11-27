@@ -1,8 +1,11 @@
 import logging
+from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters
 from storage.google_sheets import GoogleSheetsStorage
 from config import config
 from bot.handlers import start, handle_message, handle_edited_message
+from bot.handlers import start, handle_message, handle_edited_message
+from bot.channel_integration import link_channel_handler, channel_post_handler, edited_channel_post_handler
 
 # Configure logging
 logging.basicConfig(
@@ -22,6 +25,13 @@ def main():
     
     # Register handlers
     application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("link_channel", link_channel_handler))
+    
+    # Handle channel posts
+    application.add_handler(MessageHandler(filters.UpdateType.CHANNEL_POST, channel_post_handler))
+    
+    # Handle edited channel posts
+    application.add_handler(MessageHandler(filters.UpdateType.EDITED_CHANNEL_POST, edited_channel_post_handler))
     
     # Handle all messages (text, forwards, media with captions) - but NOT edited
     application.add_handler(MessageHandler(
@@ -36,7 +46,8 @@ def main():
     ))
     
     print("Bot is running (python-telegram-bot)...")
-    application.run_polling()
+    # Explicitly allow channel_post updates
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
     main()
