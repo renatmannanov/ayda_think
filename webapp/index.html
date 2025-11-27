@@ -3,10 +3,10 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Ayda Think Notes</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ayda Think</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <link rel="stylesheet" href="styles.css?v=10">
+    <link rel="stylesheet" href="styles.css?v=14">
 </head>
 
 <body>
@@ -14,57 +14,61 @@
         <!-- Stats Bar -->
         <div class="stats-bar">
             <div class="stats-group">
-                <div class="stat-item">📝 <span id="statTotal">0</span></div>
-                <div class="stat-item">🎯 <span id="statFocus">0</span></div>
-                <div class="stat-item">✅ <span id="statDone">0</span></div>
-                <div class="stat-item">📦 <span id="statArchive">0</span></div>
+                <div class="stat-item"><strong><span id="statTotal">0</span></strong></div>
+                <div class="stat-item"><strong><span id="statFocus">0</span></strong></div>
+                <div class="stat-item"><strong><span id="statDone">0</span></strong></div>
+                <div class="stat-item"><strong><span id="statArchive">0</span></strong></div>
             </div>
             <button class="btn-filter-icon" id="btnFilterToggle">
-                <span class="icon">🎚️</span>
+                🎚️
                 <span class="filter-badge" id="filterBadge"></span>
             </button>
         </div>
 
-        <!-- Filter Overlay (Hidden by default) -->
-        <div class="filter-overlay" id="filterOverlay" style="display: none;">
+        <!-- Filter Overlay -->
+        <div class="filter-overlay" id="filterOverlay">
             <div class="filter-content">
                 <div class="filter-header">
                     <h3>Filters</h3>
-                    <button class="btn-close-filter" id="btnCloseFilter">✕</button>
+                    <button class="btn-close" id="btnCloseFilter">✕</button>
                 </div>
 
-                <div class="filter-section">
-                    <h4>Date</h4>
-                    <div class="date-selectors">
-                        <select id="filterYear" class="filter-select">
-                            <option value="">Year</option>
-                        </select>
-                        <select id="filterMonth" class="filter-select">
-                            <option value="">Month</option>
-                            <option value="0">January</option>
-                            <option value="1">February</option>
-                            <option value="2">March</option>
-                            <option value="3">April</option>
-                            <option value="4">May</option>
-                            <option value="5">June</option>
-                            <option value="6">July</option>
-                            <option value="7">August</option>
-                            <option value="8">September</option>
-                            <option value="9">October</option>
-                            <option value="10">November</option>
-                            <option value="11">December</option>
-                        </select>
+                <div class="filter-body">
+                    <div class="filter-section">
+                        <h4>Date</h4>
+                        <div class="filter-row">
+                            <select id="filterYear" class="filter-select">
+                                <option value="">Year</option>
+                            </select>
+                            <select id="filterMonth" class="filter-select">
+                                <option value="">Month</option>
+                                <option value="0">January</option>
+                                <option value="1">February</option>
+                                <option value="2">March</option>
+                                <option value="3">April</option>
+                                <option value="4">May</option>
+                                <option value="5">June</option>
+                                <option value="6">July</option>
+                                <option value="7">August</option>
+                                <option value="8">September</option>
+                                <option value="9">October</option>
+                                <option value="10">November</option>
+                                <option value="11">December</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="filter-section">
+                        <h4>Tags</h4>
+                        <div class="filter-tags" id="filterTagsList">
+                            <!-- Tags injected here -->
+                        </div>
                     </div>
                 </div>
 
-                <div class="filter-section">
-                    <h4>Tags</h4>
-                    <div class="tags-list" id="filterTagsList">
-                        <!-- Tags injected here -->
-                    </div>
+                <div class="filter-footer">
+                    <button class="btn-filter-apply" id="btnApplyFilters">Apply Filters</button>
                 </div>
-
-                <button class="btn-apply-filters" id="btnApplyFilters">Apply Filters</button>
             </div>
         </div>
 
@@ -80,17 +84,17 @@
             </div>
 
             <div class="action-buttons">
-                <button class="btn btn-done">Done</button>
-                <button class="btn btn-flow">Flow</button>
-                <button class="btn btn-focus">Focus</button>
-                <button class="btn btn-reply">Reply</button>
+                <button class="btn-action btn-done">Done</button>
+                <button class="btn-action btn-flow">Flow</button>
+                <button class="btn-action btn-focus">Focus</button>
+                <button class="btn-action btn-reply">Reply</button>
             </div>
         </div>
 
-        <!-- Navigation Buttons (outside card) -->
+        <!-- Navigation Buttons -->
         <div class="navigation-buttons">
-            <button class="btn-nav btn-archive">Archive</button>
-            <button class="btn-nav btn-next" id="nextBtn">Next →</button>
+            <button class="btn-nav btn-archive archive">Archive</button>
+            <button class="btn-nav btn-next next" id="nextBtn">Next →</button>
         </div>
     </div>
 
