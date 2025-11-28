@@ -65,3 +65,10 @@ Columns: `id | telegram_message_id | date_created | content | tags | reply_to_me
     - NEVER delete the `<head>` section or `<!DOCTYPE html>` declaration.
     - For small files (< 300 lines), PREFER `write_to_file` (rewrite entire file) over `replace_file_content` to avoid accidental deletion of context or breaking structure.
     - ALWAYS verify that critical classes (like `.card`) and tags (`<html>`, `<body>`) exist after editing.
+
+## 9. Project Specific Rules (Added 2024-11-28)
+1. **Persistence First**: NEVER rely on local JSON files (`users.json`) for critical data in production environments (Render/Docker). Suggest a Database or persistent volume.
+2. **No Magic Numbers**: When accessing Google Sheets columns, ALWAYS use named constants or a mapping dictionary, never hardcoded indices (e.g., `row[10]`).
+3. **Error Visibility**: Frontend MUST display API errors to the user (via alert or toast), not just log to console. Silent failures are hard to debug.
+4. **Deployment Awareness**: When modifying `api_server.py` or `main.py`, always verify imports and syntax immediately, as these crash the deployment.
+5. **CSS Optimization**: Use CSS Variables (`:root`) for colors/spacing. Group styles by component with comment headers. Avoid deep selector nesting (max 2 levels); prefer BEM-like flat classes.

@@ -2,6 +2,7 @@ import logging
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters
 from storage.google_sheets import GoogleSheetsStorage
+from storage.db import init_db
 from config import config
 from bot.handlers import start, handle_message, handle_edited_message
 from bot.handlers import start, handle_message, handle_edited_message
@@ -14,6 +15,10 @@ logging.basicConfig(
 )
 
 def main():
+    # Initialize database
+    logging.info("Initializing database...")
+    init_db()
+    
     # Initialize storage
     storage = GoogleSheetsStorage(credentials_path=config['credentials_path'])
     

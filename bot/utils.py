@@ -1,31 +1,14 @@
-import json
 import re
-import os
-from typing import Dict, Optional
-
-USERS_FILE = 'users.json'
-
-def load_users() -> Dict[str, str]:
-    """Loads users from the JSON file."""
-    if not os.path.exists(USERS_FILE):
-        return {}
-    try:
-        with open(USERS_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except json.JSONDecodeError:
-        return {}
+from typing import Optional
+from storage.db import get_user_spreadsheet as db_get_user, save_user as db_save_user
 
 def save_user(user_id: int, spreadsheet_id: str):
-    """Saves or updates a user's spreadsheet ID."""
-    users = load_users()
-    users[str(user_id)] = spreadsheet_id
-    with open(USERS_FILE, 'w', encoding='utf-8') as f:
-        json.dump(users, f, indent=4)
+    """Saves or updates a user's spreadsheet ID in the database."""
+    db_save_user(user_id, spreadsheet_id)
 
 def get_user_spreadsheet(user_id: int) -> Optional[str]:
-    """Retrieves the spreadsheet ID for a given user."""
-    users = load_users()
-    return users.get(str(user_id))
+    """Retrieves the spreadsheet ID for a given user from the database."""
+    return db_get_user(user_id)
 
 def extract_spreadsheet_id(url_or_id: str) -> Optional[str]:
     """

@@ -4,3 +4,5 @@ python-telegram-bot
 gspread
 google-auth
 python-dotenv
+sqlalchemy
+psycopg2-binary
