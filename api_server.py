@@ -148,6 +148,8 @@ async def get_notes(user_id: Optional[int] = Query(None)):
         print(f"Converted {len(notes)} notes")
         return NotesResponse(notes=notes, total=len(notes))
         
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
