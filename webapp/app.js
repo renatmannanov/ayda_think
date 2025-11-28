@@ -38,6 +38,8 @@ async function fetchNotes() {
 
     } catch (error) {
         console.error('Error fetching notes:', error);
+        // Show error to user for debugging
+        alert(`Ошибка загрузки: ${error.message}\nUser ID: ${tg.initDataUnsafe?.user?.id || 'unknown'}`);
         loadDemoData();
     }
 }
