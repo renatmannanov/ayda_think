@@ -52,7 +52,8 @@ def main():
     
     print("Bot is running (python-telegram-bot)...")
     # Explicitly allow channel_post updates
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    # Drop pending updates to avoid conflicts with other instances
+    application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
     main()
