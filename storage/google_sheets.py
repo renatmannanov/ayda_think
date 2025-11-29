@@ -11,15 +11,31 @@ class GoogleSheetsStorage(BaseStorage):
         Initialize the Google Sheets storage.
         
         Args:
-            credentials_path: Path to the service account JSON credentials.
+            credentials_path: Path to the service account JSON credentials OR the JSON string itself.
         """
-        self.gc = gspread.service_account(filename=credentials_path)
+        import json
+        
         self.credentials_path = credentials_path
+        self.credentials_dict = None
+        
+        # Check if it's a JSON string
+        if credentials_path.strip().startswith('{'):
+            try:
+                self.credentials_dict = json.loads(credentials_path)
+                self.gc = gspread.service_account_from_dict(self.credentials_dict)
+            except json.JSONDecodeError as e:
+                raise ValueError(f"Invalid JSON credentials: {e}")
+        else:
+            # Assume it's a file path
+            self.gc = gspread.service_account(filename=credentials_path)
 
     def get_service_account_email(self) -> str:
-        """Returns the client_email from the credentials file."""
+        """Returns the client_email from the credentials."""
         import json
         try:
+            if self.credentials_dict:
+                return self.credentials_dict.get('client_email', 'Unknown')
+                
             with open(self.credentials_path, 'r') as f:
                 creds = json.load(f)
                 return creds.get('client_email', 'Unknown')

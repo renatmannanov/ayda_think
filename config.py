@@ -25,8 +25,11 @@ def load_config():
         print("Please check your .env file.")
         sys.exit(1)
         
-    # Check if credentials file exists
-    if not os.path.exists(credentials_path):
+    # Check if credentials is a file path or JSON content
+    if credentials_path.strip().startswith('{'):
+        # It's likely a JSON string (Railway style)
+        pass
+    elif not os.path.exists(credentials_path):
         print(f"Error: Credentials file not found at: {credentials_path}")
         sys.exit(1)
 
