@@ -5,7 +5,7 @@ from storage.google_sheets import GoogleSheetsStorage
 from storage.db import init_db
 from config import config
 from bot.handlers import start, handle_message, handle_edited_message
-from bot.handlers import start, handle_message, handle_edited_message
+
 from bot.channel_integration import link_channel_handler, channel_post_handler, edited_channel_post_handler
 
 # Configure logging

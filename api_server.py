@@ -1,37 +1,15 @@
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
-from typing import List, Optional
-import asyncio
-from storage.google_sheets import GoogleSheetsStorage
-from bot.utils import get_user_spreadsheet
 from config import config
+from storage.google_sheets import GoogleSheetsStorage
+from services import NoteService
+from schemas import StatusUpdate, NotesResponse
 
 app = FastAPI()
 
-# Initialize storage
+# Initialize storage and service
 storage = GoogleSheetsStorage(credentials_path=config['credentials_path'])
-
-class Note(BaseModel):
-    id: str
-    telegram_message_id: str
-    created_at: str
-    content: str
-    tags: str
-    reply_to_message_id: Optional[str] = None
-    message_type: str
-    source_chat_id: Optional[str] = None
-    source_chat_link: Optional[str] = None
-    telegram_username: Optional[str] = None
-    status: Optional[str] = ""
-
-class NotesResponse(BaseModel):
-    notes: List[Note]
-    total: int
-
-class StatusUpdate(BaseModel):
-    status: str
-    user_id: int
+note_service = NoteService(storage)
 
 @app.get("/")
 async def root():
@@ -48,28 +26,44 @@ async def get_app_js():
     """Serve JS file"""
     return FileResponse("webapp/app.js")
 
+@app.get("/api.js")
+async def get_api_js():
+    """Serve API JS file"""
+    return FileResponse("webapp/api.js")
+
+@app.get("/state.js")
+async def get_state_js():
+    """Serve State JS file"""
+    return FileResponse("webapp/state.js")
+
+@app.get("/ui.js")
+async def get_ui_js():
+    """Serve UI JS file"""
+    return FileResponse("webapp/ui.js")
+
 @app.post("/api/notes/{note_id}/status")
 async def update_note_status(note_id: str, update: StatusUpdate):
     """
     Update the status of a note.
     """
     try:
-        spreadsheet_id = get_user_spreadsheet(update.user_id)
-        if not spreadsheet_id:
-            raise HTTPException(status_code=404, detail="User not registered")
-            
-        success = await storage.update_note_status(spreadsheet_id, note_id, update.status)
+        success = await note_service.update_note_status(update.user_id, note_id, update.status)
         
         if not success:
+            # We don't distinguish between "user not found" and "note not found" here for simplicity,
+            # but in a real app we might want to be more specific.
+            # If user not found, get_user_spreadsheet returns None, service returns False.
             raise HTTPException(status_code=404, detail="Note not found or update failed")
             
         return {"status": "success", "new_status": update.status}
         
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/notes")
-async def get_notes(user_id: Optional[int] = Query(None)):
+async def get_notes(user_id: int = Query(None)):
     """
     Get all notes for a user from their Google Sheet.
     Filters out 'archived' and 'done'.
@@ -78,75 +72,14 @@ async def get_notes(user_id: Optional[int] = Query(None)):
     try:
         # If no user_id provided, return demo data
         if user_id is None:
-            demo_notes = [
-                Note(
-                    id="demo_1",
-                    telegram_message_id="123",
-                    created_at="2024-11-24T14:30:00",
-                    content="Это демо-заметка с тегами для тестирования интерфейса",
-                    tags="#важно, #работа",
-                    message_type="general",
-                    status="focus"
-                ),
-                Note(
-                    id="demo_2",
-                    telegram_message_id="124",
-                    created_at="2024-11-24T14:31:00",
-                    content="Форвардированное сообщение из канала",
-                    tags="#новости",
-                    message_type="forwarded",
-                    status="new"
-                )
-            ]
-            return NotesResponse(notes=demo_notes, total=len(demo_notes))
+            return note_service.get_demo_notes()
         
-        # Get user's spreadsheet ID
-        spreadsheet_id = get_user_spreadsheet(user_id)
-        print(f"User {user_id} -> Spreadsheet ID: {spreadsheet_id}")
+        response = await note_service.get_user_notes(user_id)
         
-        if not spreadsheet_id:
-            print(f"User {user_id} not registered")
-            raise HTTPException(status_code=404, detail="User not registered")
-        
-        # Fetch notes from Google Sheets
-        notes_data = await asyncio.to_thread(
-            storage._get_all_notes_sync, 
-            spreadsheet_id
-        )
-        
-        print(f"Fetched {len(notes_data)} rows from spreadsheet")
-        
-        # Convert to Note objects
-        notes = []
-        for row in notes_data:
-            if len(row) >= 9:
-                status = row[10] if len(row) > 10 else ""
-                
-                note = Note(
-                    id=row[0],
-                    telegram_message_id=row[1],
-                    created_at=row[2],
-                    content=row[3],
-                    tags=row[4],
-                    reply_to_message_id=row[5] if row[5] else None,
-                    message_type=row[6],
-                    source_chat_id=row[7] if row[7] else None,
-                    source_chat_link=row[8] if row[8] else None,
-                    telegram_username=row[9] if len(row) > 9 and row[9] else None,
-                    status=status
-                )
-                notes.append(note)
-        
-        # Sort: 'focus' first, then others by date (newest first)
-        # Assuming input is already roughly sorted by date (append order)
-        # We want newest first, so reverse the list first
-        notes.reverse()
-        
-        # Then stable sort to put focus at top
-        notes.sort(key=lambda x: 0 if x.status == "focus" else 1)
-        
-        print(f"Converted {len(notes)} notes")
-        return NotesResponse(notes=notes, total=len(notes))
+        if response is None:
+             raise HTTPException(status_code=404, detail="User not registered")
+             
+        return response
         
     except HTTPException:
         raise
