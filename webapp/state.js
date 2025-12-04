@@ -1,28 +1,37 @@
-// state.js
+// state.js - New minimal design state management
 export const state = {
+    // Data
     allNotes: [],
-    activeNotes: [],
     filteredNotes: [],
+
+    // Navigation
     currentIndex: 0,
 
-    filters: {
-        year: '',
-        month: '',
-        tags: []
-    },
+    // View mode: 'all' | 'focus' | 'tag' | 'notag' | 'date'
+    mode: 'all',
+    previousMode: 'all',
 
+    // Filters
+    currentTag: null,
+    selectedMonth: null,
+    selectedYear: null,
+
+    // Date picker temp state
+    pickerMonth: null,
+    pickerYear: null,
+
+    // Set notes from API
     setNotes(notes) {
         this.allNotes = notes;
+        this.applyFilters();
     },
 
-    getNote(index) {
-        return this.filteredNotes[index];
-    },
-
+    // Get current note
     getCurrentNote() {
-        return this.filteredNotes[this.currentIndex];
+        return this.filteredNotes[this.currentIndex] || null;
     },
 
+    // Update note status locally
     updateNoteStatus(noteId, newStatus) {
         const note = this.allNotes.find(n => n.id === noteId);
         if (note) {
@@ -30,86 +39,150 @@ export const state = {
         }
     },
 
-    applyFilters() {
-        // 1. Filter out Archived/Done first (Base Set)
-        this.activeNotes = this.allNotes.filter(n => !['archived', 'done'].includes(n.status));
-
-        const hasDateFilter = this.filters.year !== '' || this.filters.month !== '';
-        const hasTagFilter = this.filters.tags.length > 0;
-        const isFiltering = hasDateFilter || hasTagFilter;
-
-        // 2. Apply User Filters
-        this.filteredNotes = this.activeNotes.filter(note => {
-            // Date
-            if (this.filters.year) {
-                const date = new Date(note.created_at);
-                if (date.getFullYear().toString() !== this.filters.year) return false;
-            }
-            if (this.filters.month) {
-                const date = new Date(note.created_at);
-                if (date.getMonth().toString() !== this.filters.month) return false;
-            }
-
-            // Tags
-            if (hasTagFilter) {
-                const noteTags = note.tags ? note.tags.split(',').map(t => t.trim()) : [];
-                const hasNoTags = noteTags.length === 0;
-                const matches = this.filters.tags.some(selectedTag => {
-                    if (selectedTag === '__no_tags__') return hasNoTags;
-                    return noteTags.includes(selectedTag);
-                });
-                if (!matches) return false;
-            }
-
-            return true;
-        });
-
-        // 3. Sort
-        if (isFiltering) {
-            // Chronological (Oldest -> Newest)
-            this.filteredNotes.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-        } else {
-            // Default: Focus first, then Newest -> Oldest
-            this.filteredNotes.sort((a, b) => {
-                if (a.status === 'focus' && b.status !== 'focus') return -1;
-                if (a.status !== 'focus' && b.status === 'focus') return 1;
-                return new Date(b.created_at) - new Date(a.created_at);
-            });
-        }
-
-        // Reset index
+    // Mode switching
+    setMode(newMode) {
+        this.previousMode = this.mode;
+        this.mode = newMode;
         this.currentIndex = 0;
-
-        return isFiltering;
+        this.applyFilters();
     },
 
+    // Go back to previous mode
+    goBack() {
+        this.mode = this.previousMode;
+        this.currentTag = null;
+        this.selectedMonth = null;
+        this.selectedYear = null;
+        this.currentIndex = 0;
+        this.applyFilters();
+    },
+
+    // Switch to tag mode
+    filterByTag(tag) {
+        this.previousMode = this.mode;
+        this.currentTag = tag;
+        this.mode = 'tag';
+        this.currentIndex = 0;
+        this.applyFilters();
+    },
+
+    // Switch to notag mode
+    filterByNoTag() {
+        this.previousMode = this.mode;
+        this.mode = 'notag';
+        this.currentIndex = 0;
+        this.applyFilters();
+    },
+
+    // Switch to date mode
+    filterByDate(month, year) {
+        this.previousMode = this.mode;
+        this.selectedMonth = month;
+        this.selectedYear = year;
+        this.mode = 'date';
+        this.currentIndex = 0;
+        this.applyFilters();
+    },
+
+    // Apply filters based on current mode
+    applyFilters() {
+        switch (this.mode) {
+            case 'all':
+                // Show notes with status 'new', 'focus' or empty (not done/archived)
+                this.filteredNotes = this.allNotes.filter(n =>
+                    !n.status || n.status === 'new' || n.status === '' || n.status === 'focus'
+                );
+                break;
+
+            case 'focus':
+                // Show notes with focus status
+                this.filteredNotes = this.allNotes.filter(n => n.status === 'focus');
+                break;
+
+            case 'tag':
+                // Show all notes with specific tag (any status)
+                this.filteredNotes = this.allNotes.filter(n => {
+                    if (!n.tags) return false;
+                    const noteTags = n.tags.split(',').map(t => t.trim());
+                    return noteTags.includes(this.currentTag);
+                });
+                break;
+
+            case 'notag':
+                // Show all notes without tags (any status)
+                this.filteredNotes = this.allNotes.filter(n =>
+                    !n.tags || n.tags.trim() === ''
+                );
+                break;
+
+            case 'date':
+                // Show all notes for specific month/year (any status)
+                this.filteredNotes = this.allNotes.filter(n => {
+                    if (!n.created_at) return false;
+                    const date = new Date(n.created_at);
+                    return date.getMonth() + 1 === this.selectedMonth &&
+                        date.getFullYear() === this.selectedYear;
+                });
+                break;
+
+            default:
+                this.filteredNotes = [];
+        }
+
+        // Sort: newest first
+        this.filteredNotes.sort((a, b) =>
+            new Date(b.created_at) - new Date(a.created_at)
+        );
+    },
+
+    // Navigation
     nextNote() {
         if (this.filteredNotes.length === 0) return;
         this.currentIndex = (this.currentIndex + 1) % this.filteredNotes.length;
     },
 
-    toggleTagFilter(tag) {
-        const index = this.filters.tags.indexOf(tag);
-        if (index === -1) {
-            this.filters.tags.push(tag);
-            return true; // added
-        } else {
-            this.filters.tags.splice(index, 1);
-            return false; // removed
-        }
+    // Toggle focus on current note
+    toggleFocus() {
+        const note = this.getCurrentNote();
+        if (!note) return null;
+
+        const newStatus = note.status === 'focus' ? 'new' : 'focus';
+        this.updateNoteStatus(note.id, newStatus);
+        return newStatus;
     },
 
-    extractFilterOptions() {
+    // Mark current note as done
+    markDone() {
+        const note = this.getCurrentNote();
+        if (!note) return null;
+
+        this.updateNoteStatus(note.id, 'done');
+        this.applyFilters();
+
+        // Adjust index if needed
+        if (this.currentIndex >= this.filteredNotes.length) {
+            this.currentIndex = Math.max(0, this.filteredNotes.length - 1);
+        }
+
+        return 'done';
+    },
+
+    // Extract available years from data
+    extractYears() {
         const years = new Set();
-        const tags = new Set();
-
-        const notesToScan = this.allNotes.filter(n => !['archived', 'done'].includes(n.status));
-
-        notesToScan.forEach(note => {
+        this.allNotes.forEach(note => {
             if (note.created_at) {
-                const date = new Date(note.created_at);
-                years.add(date.getFullYear());
+                const year = new Date(note.created_at).getFullYear();
+                years.add(year);
             }
+        });
+        return Array.from(years).sort((a, b) => b - a);
+    },
+
+    // Extract all unique tags from data
+    extractTags() {
+        const tags = new Set();
+        this.allNotes.forEach(note => {
             if (note.tags) {
                 note.tags.split(',').forEach(tag => {
                     const trimmed = tag.trim();
@@ -117,10 +190,6 @@ export const state = {
                 });
             }
         });
-
-        return {
-            years: Array.from(years).sort((a, b) => b - a),
-            tags: Array.from(tags).sort()
-        };
+        return Array.from(tags).sort();
     }
 };

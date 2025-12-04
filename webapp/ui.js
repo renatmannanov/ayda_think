@@ -1,142 +1,234 @@
-// ui.js
+// ui.js - New minimal design UI rendering
+import { state } from './state.js';
+
+// Month names for display
+const monthNames = {
+    1: 'Январь', 2: 'Февраль', 3: 'Март', 4: 'Апрель',
+    5: 'Май', 6: 'Июнь', 7: 'Июль', 8: 'Август',
+    9: 'Сентябрь', 10: 'Октябрь', 11: 'Ноябрь', 12: 'Декабрь'
+};
+
+const monthsShort = [
+    { value: 1, label: 'Янв' },
+    { value: 2, label: 'Фев' },
+    { value: 3, label: 'Мар' },
+    { value: 4, label: 'Апр' },
+    { value: 5, label: 'Май' },
+    { value: 6, label: 'Июн' },
+    { value: 7, label: 'Июл' },
+    { value: 8, label: 'Авг' },
+    { value: 9, label: 'Сен' },
+    { value: 10, label: 'Окт' },
+    { value: 11, label: 'Ноя' },
+    { value: 12, label: 'Дек' }
+];
+
+// Format date for display
+function formatDate(dateString) {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    const day = date.getDate();
+    const month = date.toLocaleString('en-US', { month: 'short' });
+    const year = date.getFullYear();
+    return `${day} ${month} ${year}`;
+}
+
 export const ui = {
     elements: {
-        statTotal: document.getElementById('statTotal'),
-        statFocus: document.getElementById('statFocus'),
-        statDone: document.getElementById('statDone'),
-        statArchive: document.getElementById('statArchive'),
-        filterBadge: document.getElementById('filterBadge'),
-        filterOverlay: document.getElementById('filterOverlay'),
-        filterYear: document.getElementById('filterYear'),
-        filterMonth: document.getElementById('filterMonth'),
-        filterTagsList: document.getElementById('filterTagsList'),
-        datePill: document.getElementById('datePill'),
-        noteType: document.getElementById('noteType'),
-        tags: document.getElementById('tags'),
-        noteText: document.getElementById('noteText'),
-        focusBtn: document.querySelector('.btn-focus'),
-        nextBtn: document.getElementById('nextBtn'),
-        btnFilterToggle: document.getElementById('btnFilterToggle'),
-        btnCloseFilter: document.getElementById('btnCloseFilter'),
-        btnApplyFilters: document.getElementById('btnApplyFilters'),
-        btnDone: document.querySelector('.btn-done'),
-        btnFlow: document.querySelector('.btn-flow'),
-        btnReply: document.querySelector('.btn-reply'),
-        btnArchive: document.querySelector('.btn-archive')
+        header: document.getElementById('appHeader'),
+        body: document.getElementById('appBody'),
+        actions: document.getElementById('appActions'),
+        datePickerOverlay: document.getElementById('datePickerOverlay'),
+        datePickerYears: document.getElementById('datePickerYears'),
+        datePickerMonths: document.getElementById('datePickerMonths'),
+        btnCloseDatePicker: document.getElementById('btnCloseDatePicker'),
+        btnApplyDate: document.getElementById('btnApplyDate')
     },
 
-    updateStats(notes) {
-        const total = notes.length;
-        const focus = notes.filter(n => n.status === 'focus').length;
-        const done = notes.filter(n => n.status === 'done').length;
-        const archived = notes.filter(n => n.status === 'archived').length;
+    // Render header based on current mode
+    renderHeader() {
+        const { mode, filteredNotes, currentIndex, currentTag, selectedMonth, selectedYear } = state;
+        const count = filteredNotes.length;
+        const counter = count > 0 ? `${currentIndex + 1}/${count}` : '0/0';
 
-        this.elements.statTotal.textContent = total;
-        this.elements.statFocus.textContent = focus;
-        this.elements.statDone.textContent = done;
-        this.elements.statArchive.textContent = archived;
-    },
+        if (mode === 'tag' || mode === 'notag' || mode === 'date') {
+            // Back mode: show back button and filter title
+            let title = '';
+            if (mode === 'tag') title = currentTag;
+            if (mode === 'notag') title = '⚠️ без тега';
+            if (mode === 'date') title = `${monthNames[selectedMonth]} ${selectedYear}`;
 
-    renderFilterOptions(options, activeTags, onTagToggle) {
-        // Populate Year Dropdown
-        const yearSelect = this.elements.filterYear;
-        while (yearSelect.options.length > 1) yearSelect.remove(1);
-
-        options.years.forEach(year => {
-            const option = document.createElement('option');
-            option.value = year;
-            option.textContent = year;
-            yearSelect.appendChild(option);
-        });
-
-        // Populate Tags List
-        const tagsList = this.elements.filterTagsList;
-        tagsList.innerHTML = '';
-
-        const createTagEl = (text, value) => {
-            const tagEl = document.createElement('div');
-            tagEl.className = 'filter-tag';
-            if (activeTags.includes(value)) tagEl.classList.add('selected');
-            tagEl.textContent = text;
-            tagEl.dataset.tag = value;
-            tagEl.onclick = () => {
-                const isSelected = onTagToggle(value);
-                if (isSelected) tagEl.classList.add('selected');
-                else tagEl.classList.remove('selected');
-            };
-            return tagEl;
-        };
-
-        tagsList.appendChild(createTagEl('No Tags', '__no_tags__'));
-        options.tags.forEach(tag => tagsList.appendChild(createTagEl(tag, tag)));
-    },
-
-    updateFilterBadge(isActive) {
-        if (isActive) {
-            this.elements.filterBadge.classList.add('active');
+            this.elements.header.innerHTML = `
+                <button class="btn-back" id="btnBack">← Назад</button>
+                <div class="header-right">
+                    <span class="header-title">${title}</span>
+                    <span class="counter">${counter}</span>
+                </div>
+            `;
         } else {
-            this.elements.filterBadge.classList.remove('active');
+            // Toggle mode: show Все/Фокус toggle
+            this.elements.header.innerHTML = `
+                <div class="toggle">
+                    <button class="toggle-btn ${mode === 'all' ? 'active' : ''}" data-mode="all">Все</button>
+                    <span class="toggle-separator">/</span>
+                    <button class="toggle-btn ${mode === 'focus' ? 'active' : ''}" data-mode="focus">Фокус</button>
+                </div>
+                <span class="counter">${counter}</span>
+            `;
         }
     },
 
-    displayNote(note) {
+    // Render card or empty state
+    renderCard() {
+        const note = state.getCurrentNote();
+
         if (!note) {
-            this.showEmptyState();
+            this.renderEmptyState();
             return;
         }
 
-        // Update date pill
-        const date = new Date(note.created_at);
-        this.elements.datePill.style.display = 'block';
-        this.elements.datePill.textContent = this.formatDatePill(date);
-
-        // Update note type
-        this.elements.noteType.textContent = note.message_type || 'General';
-        this.elements.noteType.className = `note-type ${note.message_type}`;
-
-        // Update tags
-        if (note.tags) {
+        // Parse tags
+        let tagsHtml = '';
+        if (note.tags && note.tags.trim()) {
             const tagList = note.tags.split(',').map(t => t.trim()).filter(t => t);
-            this.elements.tags.innerHTML = tagList.map(tag => `<span class="tag">${tag}</span>`).join('');
+            tagsHtml = tagList.map(tag =>
+                `<button class="card-tag" data-tag="${tag}">${tag}</button>`
+            ).join('');
         } else {
-            this.elements.tags.innerHTML = '';
+            tagsHtml = `<button class="card-notag">⚠️ без тега</button>`;
         }
 
-        // Update note text
-        this.elements.noteText.textContent = note.content;
-
-        // Update Focus button
-        if (note.status === 'focus') {
-            this.elements.focusBtn.textContent = 'Unfocus';
-            this.elements.focusBtn.style.fontWeight = 'bold';
-        } else {
-            this.elements.focusBtn.textContent = 'Focus';
-            this.elements.focusBtn.style.fontWeight = 'normal';
-        }
+        this.elements.body.innerHTML = `
+            <div class="card">
+                <div class="card-text">${this.escapeHtml(note.content)}</div>
+                <div class="card-meta">
+                    <div class="card-tags">${tagsHtml}</div>
+                    <button class="card-date">${formatDate(note.created_at)}</button>
+                </div>
+            </div>
+        `;
     },
 
-    showEmptyState() {
-        this.elements.datePill.style.display = 'none';
-        this.elements.noteType.textContent = '';
-        this.elements.tags.innerHTML = '';
-        this.elements.noteText.textContent = 'Нет заметок для отображения';
-    },
+    // Render empty state based on mode
+    renderEmptyState() {
+        const { mode, currentTag, selectedMonth, selectedYear } = state;
 
-    formatDatePill(date) {
-        const today = new Date();
-        const isToday = date.toDateString() === today.toDateString();
-        if (isToday) return 'Today';
-        return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-    },
-
-    toggleFilterOverlay(show) {
-        this.elements.filterOverlay.style.display = show ? 'flex' : 'none';
-    },
-
-    getFilterValues() {
-        return {
-            year: this.elements.filterYear.value,
-            month: this.elements.filterMonth.value
+        const states = {
+            all: {
+                icon: '✓',
+                title: 'Всё обработано',
+                subtitle: 'Новые мысли появятся когда напишешь в канал'
+            },
+            focus: {
+                icon: '🎯',
+                title: 'Нет мыслей в фокусе',
+                subtitle: 'Нажми 🎯 чтобы добавить'
+            },
+            tag: {
+                icon: '🏷️',
+                title: `Нет записей с ${currentTag}`,
+                subtitle: ''
+            },
+            notag: {
+                icon: '✓',
+                title: 'Все мысли размечены',
+                subtitle: ''
+            },
+            date: {
+                icon: '📅',
+                title: `Нет записей за ${monthNames[selectedMonth]} ${selectedYear}`,
+                subtitle: ''
+            }
         };
+
+        const { icon, title, subtitle } = states[mode] || states.all;
+
+        this.elements.body.innerHTML = `
+            <div class="empty-state">
+                <span class="empty-icon">${icon}</span>
+                <h2 class="empty-title">${title}</h2>
+                ${subtitle ? `<p class="empty-subtitle">${subtitle}</p>` : ''}
+            </div>
+        `;
+    },
+
+    // Render action buttons
+    renderActions() {
+        const note = state.getCurrentNote();
+
+        if (!note) {
+            this.elements.actions.innerHTML = '';
+            return;
+        }
+
+        const focusClass = note.status === 'focus' ? 'active' : '';
+
+        this.elements.actions.innerHTML = `
+            <button class="action-btn focus ${focusClass}" id="btnFocus">🎯 Фокус</button>
+            <button class="action-btn done" id="btnDone">✓ Готово</button>
+            <button class="action-btn next" id="btnNext">Дальше →</button>
+            <button class="action-btn channel" id="btnChannel">↗ В канал</button>
+        `;
+    },
+
+    // Show date picker
+    showDatePicker() {
+        const years = state.extractYears();
+        const currentYear = new Date().getFullYear();
+        const currentMonth = new Date().getMonth() + 1;
+
+        // Initialize picker state
+        state.pickerYear = state.pickerYear || years[0] || currentYear;
+        state.pickerMonth = state.pickerMonth || currentMonth;
+
+        // Render years
+        this.elements.datePickerYears.innerHTML = years.map(year =>
+            `<button class="picker-btn ${year === state.pickerYear ? 'active' : ''}" data-year="${year}">${year}</button>`
+        ).join('');
+
+        // Render months
+        this.elements.datePickerMonths.innerHTML = monthsShort.map(m =>
+            `<button class="picker-btn ${m.value === state.pickerMonth ? 'active' : ''}" data-month="${m.value}">${m.label}</button>`
+        ).join('');
+
+        this.elements.datePickerOverlay.classList.add('active');
+    },
+
+    // Hide date picker
+    hideDatePicker() {
+        this.elements.datePickerOverlay.classList.remove('active');
+    },
+
+    // Update date picker selection
+    updatePickerSelection(type, value) {
+        if (type === 'year') {
+            state.pickerYear = value;
+            // Re-render years to update active state
+            const years = state.extractYears();
+            this.elements.datePickerYears.innerHTML = years.map(year =>
+                `<button class="picker-btn ${year === state.pickerYear ? 'active' : ''}" data-year="${year}">${year}</button>`
+            ).join('');
+        } else if (type === 'month') {
+            state.pickerMonth = value;
+            // Re-render months to update active state
+            this.elements.datePickerMonths.innerHTML = monthsShort.map(m =>
+                `<button class="picker-btn ${m.value === state.pickerMonth ? 'active' : ''}" data-month="${m.value}">${m.label}</button>`
+            ).join('');
+        }
+    },
+
+    // Render entire UI
+    render() {
+        this.renderHeader();
+        this.renderCard();
+        this.renderActions();
+    },
+
+    // Utility: escape HTML
+    escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 };

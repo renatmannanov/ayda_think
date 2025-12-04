@@ -1,141 +1,232 @@
-// app.js
+// app.js - New minimal design app logic
 import { api } from './api.js';
 import { state } from './state.js';
 import { ui } from './ui.js';
 
-// Initialize
+// Initialize app
 async function init() {
     api.init();
-
-    // Event Listeners
-    setupEventListeners();
-
-    // Initial Load
     await loadNotes();
+    setupEventListeners();
+    ui.render();
 }
 
-function setupEventListeners() {
-    // Navigation
-    ui.elements.nextBtn.addEventListener('click', () => {
-        state.nextNote();
-        ui.displayNote(state.getCurrentNote());
-        api.haptic('light');
-    });
-
-    // Actions
-    ui.elements.btnDone.addEventListener('click', () => handleStatusUpdate('done', 'medium'));
-    ui.elements.btnFlow.addEventListener('click', () => handleStatusUpdate('flow', 'light'));
-
-    ui.elements.focusBtn.addEventListener('click', () => {
-        const note = state.getCurrentNote();
-        if (!note) return;
-
-        const newStatus = note.status === 'focus' ? '' : 'focus';
-        handleStatusUpdate(newStatus, 'medium', true); // true = toggle logic handled here, but we pass new status
-    });
-
-    ui.elements.btnArchive.addEventListener('click', () => {
-        const note = state.getCurrentNote();
-        if (!note) return;
-
-        api.showConfirm("Archive this note?", (confirmed) => {
-            if (confirmed) {
-                handleStatusUpdate('archived', 'heavy');
-            }
-        });
-    });
-
-    ui.elements.btnReply.addEventListener('click', () => {
-        api.close();
-    });
-
-    // Filters
-    ui.elements.btnFilterToggle.addEventListener('click', () => ui.toggleFilterOverlay(true));
-    ui.elements.btnCloseFilter.addEventListener('click', () => ui.toggleFilterOverlay(false));
-
-    ui.elements.btnApplyFilters.addEventListener('click', () => {
-        const values = ui.getFilterValues();
-        state.filters.year = values.year;
-        state.filters.month = values.month;
-
-        const isFiltering = state.applyFilters();
-        ui.updateFilterBadge(isFiltering);
-        ui.displayNote(state.getCurrentNote());
-        ui.toggleFilterOverlay(false);
-    });
-}
-
-async function handleStatusUpdate(newStatus, hapticType, isToggle = false) {
-    const note = state.getCurrentNote();
-    if (!note) return;
-
-    // Optimistic Update
-    state.updateNoteStatus(note.id, newStatus);
-
-    // Re-calculate stats and filters
-    ui.updateStats(state.allNotes);
-    const isFiltering = state.applyFilters();
-    ui.updateFilterBadge(isFiltering);
-
-    // Re-render
-    ui.displayNote(state.getCurrentNote());
-
-    // Haptic
-    api.haptic(hapticType);
-
-    // API Call
-    const userId = api.getUserId();
-    await api.updateStatus(note.id, newStatus, userId);
-}
-
+// Load notes from API
 async function loadNotes() {
     try {
         const userId = api.getUserId();
         const data = await api.fetchNotes(userId);
-
         state.setNotes(data.notes || []);
-
-        // Initial UI Setup
-        ui.updateStats(state.allNotes);
-
-        const filterOptions = state.extractFilterOptions();
-        ui.renderFilterOptions(
-            filterOptions,
-            state.filters.tags,
-            (tag) => state.toggleTagFilter(tag) // Callback for tag toggle
-        );
-
-        state.applyFilters();
-        ui.displayNote(state.getCurrentNote());
-
     } catch (error) {
-        // Fallback to demo data if needed, or just show error
-        console.log("Loading demo data due to error");
+        console.log('Loading demo data due to error:', error);
         loadDemoData();
     }
 }
 
+// Fallback demo data
 function loadDemoData() {
     const demoNotes = [
-        { id: '1', created_at: '2024-11-24T14:30:00', content: 'Active Note 1', tags: '#work', status: 'focus', message_type: 'general' },
-        { id: '2', created_at: '2024-11-24T14:31:00', content: 'Active Note 2', tags: '#news', status: 'new', message_type: 'forwarded' },
-        { id: '3', created_at: '2023-05-20T10:00:00', content: 'Archived Note', tags: '#old', status: 'archived', message_type: 'general' },
-        { id: '4', created_at: '2024-11-20T10:00:00', content: 'Done Note', tags: '#done', status: 'done', message_type: 'general' }
+        {
+            id: 'demo_1',
+            created_at: '2025-11-28T14:30:00',
+            content: 'Думик\nЧем больше сможете взять с сообщества, чем больше готовы вложить.\nКак я могу быть полезен?\nКакая моя позиция тут?',
+            tags: '#wndr3',
+            status: 'focus'
+        },
+        {
+            id: 'demo_2',
+            created_at: '2025-11-15T14:31:00',
+            content: 'Позиция в сообществе — это про вклад, не статус. Чем больше даёшь, тем крепче связи.',
+            tags: '#wndr3, #community',
+            status: 'new'
+        },
+        {
+            id: 'demo_3',
+            created_at: '2025-10-20T10:00:00',
+            content: 'Какая-то мысль без тегов которую записал на бегу и забыл пометить',
+            tags: '',
+            status: 'new'
+        },
+        {
+            id: 'demo_4',
+            created_at: '2025-09-10T10:00:00',
+            content: 'Running community needs better coordination. Maybe a simple app to sync group runs?',
+            tags: '#ayda, #running',
+            status: 'done'
+        }
     ];
-
     state.setNotes(demoNotes);
-    ui.updateStats(state.allNotes);
-
-    const filterOptions = state.extractFilterOptions();
-    ui.renderFilterOptions(
-        filterOptions,
-        state.filters.tags,
-        (tag) => state.toggleTagFilter(tag)
-    );
-
-    state.applyFilters();
-    ui.displayNote(state.getCurrentNote());
 }
 
-// Start
+// Setup event listeners using event delegation
+function setupEventListeners() {
+    // Header events: Toggle and Back button
+    ui.elements.header.addEventListener('click', (e) => {
+        // Toggle buttons
+        if (e.target.matches('.toggle-btn')) {
+            const mode = e.target.dataset.mode;
+            state.setMode(mode);
+            ui.render();
+            api.haptic('light');
+        }
+
+        // Back button
+        if (e.target.matches('#btnBack')) {
+            state.goBack();
+            ui.render();
+            api.haptic('light');
+        }
+    });
+
+    // Body events: Tag and Date clicks
+    ui.elements.body.addEventListener('click', (e) => {
+        // Tag click
+        if (e.target.matches('.card-tag')) {
+            const tag = e.target.dataset.tag;
+            state.filterByTag(tag);
+            ui.render();
+            api.haptic('light');
+        }
+
+        // No tag click
+        if (e.target.matches('.card-notag')) {
+            state.filterByNoTag();
+            ui.render();
+            api.haptic('light');
+        }
+
+        // Date click - open date picker
+        if (e.target.matches('.card-date')) {
+            ui.showDatePicker();
+        }
+    });
+
+    // Actions events
+    ui.elements.actions.addEventListener('click', async (e) => {
+        // Focus toggle
+        if (e.target.matches('#btnFocus')) {
+            await handleToggleFocus();
+        }
+
+        // Done
+        if (e.target.matches('#btnDone')) {
+            await handleDone();
+        }
+
+        // Next
+        if (e.target.matches('#btnNext')) {
+            handleNext();
+        }
+
+        // Open channel
+        if (e.target.matches('#btnChannel')) {
+            handleOpenChannel();
+        }
+    });
+
+    // Date picker events
+    ui.elements.btnCloseDatePicker.addEventListener('click', () => {
+        ui.hideDatePicker();
+    });
+
+    // Click outside to close
+    ui.elements.datePickerOverlay.addEventListener('click', (e) => {
+        if (e.target === ui.elements.datePickerOverlay) {
+            ui.hideDatePicker();
+        }
+    });
+
+    // Year/Month selection in date picker
+    ui.elements.datePickerYears.addEventListener('click', (e) => {
+        if (e.target.matches('.picker-btn')) {
+            const year = parseInt(e.target.dataset.year);
+            ui.updatePickerSelection('year', year);
+        }
+    });
+
+    ui.elements.datePickerMonths.addEventListener('click', (e) => {
+        if (e.target.matches('.picker-btn')) {
+            const month = parseInt(e.target.dataset.month);
+            ui.updatePickerSelection('month', month);
+        }
+    });
+
+    // Apply date filter
+    ui.elements.btnApplyDate.addEventListener('click', () => {
+        if (state.pickerMonth && state.pickerYear) {
+            state.filterByDate(state.pickerMonth, state.pickerYear);
+            ui.hideDatePicker();
+            ui.render();
+            api.haptic('light');
+        }
+    });
+}
+
+// Handle focus toggle
+async function handleToggleFocus() {
+    const note = state.getCurrentNote();
+    if (!note) return;
+
+    const newStatus = state.toggleFocus();
+    ui.render();
+    api.haptic('medium');
+
+    // API call
+    const userId = api.getUserId();
+    if (userId !== 'demo') {
+        await api.updateStatus(note.id, newStatus, userId);
+    }
+}
+
+// Handle done
+async function handleDone() {
+    const note = state.getCurrentNote();
+    if (!note) return;
+
+    state.markDone();
+    ui.render();
+    api.haptic('medium');
+
+    // API call
+    const userId = api.getUserId();
+    if (userId !== 'demo') {
+        await api.updateStatus(note.id, 'done', userId);
+    }
+}
+
+// Handle next
+function handleNext() {
+    state.nextNote();
+    ui.render();
+    api.haptic('light');
+}
+
+// Handle open channel - open link without closing app
+function handleOpenChannel() {
+    const note = state.getCurrentNote();
+    if (!note) return;
+
+    // Try to construct Telegram link from available data
+    if (note.tg_link) {
+        // Open in Telegram using the web app's openTelegramLink
+        if (window.Telegram?.WebApp?.openTelegramLink) {
+            window.Telegram.WebApp.openTelegramLink(note.tg_link);
+        } else {
+            window.open(note.tg_link, '_blank');
+        }
+    } else if (note.source_chat_id && note.telegram_message_id) {
+        // Try to construct link
+        const chatId = note.source_chat_id.toString().replace('-100', '');
+        const link = `https://t.me/c/${chatId}/${note.telegram_message_id}`;
+        if (window.Telegram?.WebApp?.openTelegramLink) {
+            window.Telegram.WebApp.openTelegramLink(link);
+        } else {
+            window.open(link, '_blank');
+        }
+    } else {
+        api.showAlert('Ссылка на канал недоступна');
+    }
+}
+
+// Start the app
 init();
