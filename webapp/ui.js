@@ -121,6 +121,16 @@ export const ui = {
         `;
     },
 
+    // Render loading state
+    renderLoadingState(message = 'Загрузка...') {
+        this.elements.body.innerHTML = `
+            <div class="loading-state">
+                <div class="spinner"></div>
+                <div class="loading-text">${message}</div>
+            </div>
+        `;
+    },
+
     // Render empty state based on mode
     renderEmptyState() {
         const { mode, currentTag, selectedMonth, selectedYear } = state;
@@ -188,7 +198,7 @@ export const ui = {
                     <button class="action-btn done" id="btnDone">✓ Готово</button>
                 </div>
                 <div class="actions-right">
-                    <button class="action-btn arrow" id="btnBack">←</button>
+                    <button class="action-btn arrow" id="btnBackArrow">←</button>
                     <span class="actions-separator">|</span>
                     <button class="action-btn arrow" id="btnNextRelated">↓</button>
                     <span class="actions-separator">|</span>

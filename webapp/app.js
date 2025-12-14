@@ -127,6 +127,11 @@ function setupEventListeners() {
             await handleEnterRelated();
         }
 
+        // Back arrow in related mode (exit)
+        if (e.target.matches('#btnBackArrow')) {
+            handleExitRelated();
+        }
+
         // Next related (in related mode)
         if (e.target.matches('#btnNextRelated')) {
             handleNextRelated();
@@ -249,6 +254,12 @@ async function handleEnterRelated() {
 
     // Enter related mode
     state.enterRelatedMode();
+
+    // Show loading state
+    ui.renderHeader();
+    ui.renderLoadingState('Вычисляем связи...');
+    ui.elements.actions.innerHTML = ''; // Clear actions during loading
+    api.haptic('light');
 
     // Fetch related notes from API
     const userId = api.getUserId();
