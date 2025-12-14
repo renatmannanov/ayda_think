@@ -29,7 +29,7 @@ export const api = {
 
     async updateStatus(noteId, newStatus, userId) {
         if (userId === 'demo') return;
-        
+
         try {
             await fetch(`/api/notes/${noteId}/status`, {
                 method: 'POST',
@@ -39,6 +39,20 @@ export const api = {
         } catch (error) {
             console.error('Error updating status:', error);
             this.tg.showAlert('Error updating status');
+            throw error;
+        }
+    },
+
+    async fetchRelatedNotes(noteId, userId) {
+        try {
+            const response = await fetch(`/api/notes/${noteId}/related?user_id=${userId}`);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const data = await response.json();
+            return data.related || [];
+        } catch (error) {
+            console.error('Error fetching related notes:', error);
             throw error;
         }
     },

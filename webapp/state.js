@@ -7,7 +7,7 @@ export const state = {
     // Navigation
     currentIndex: 0,
 
-    // View mode: 'all' | 'focus' | 'tag' | 'notag' | 'date'
+    // View mode: 'all' | 'focus' | 'tag' | 'notag' | 'date' | 'related'
     mode: 'all',
     previousMode: 'all',
 
@@ -20,6 +20,11 @@ export const state = {
     pickerMonth: null,
     pickerYear: null,
 
+    // Related mode state
+    parentNoteId: null,         // ID of the note we're viewing relations for
+    relatedNotes: [],           // Array of related notes
+    relatedIndex: 0,            // Current position in related notes
+
     // Set notes from API
     setNotes(notes) {
         this.allNotes = notes;
@@ -28,6 +33,9 @@ export const state = {
 
     // Get current note
     getCurrentNote() {
+        if (this.mode === 'related') {
+            return this.relatedNotes[this.relatedIndex] || null;
+        }
         return this.filteredNotes[this.currentIndex] || null;
     },
 
@@ -191,5 +199,53 @@ export const state = {
             }
         });
         return Array.from(tags).sort();
+    },
+
+    // Related mode methods
+    setRelatedNotes(notes, parentNoteId) {
+        this.relatedNotes = notes;
+        this.parentNoteId = parentNoteId;
+        this.relatedIndex = 0;
+    },
+
+    enterRelatedMode() {
+        const currentNote = this.getCurrentNote();
+        if (!currentNote) return false;
+
+        this.previousMode = this.mode;
+        this.mode = 'related';
+        this.parentNoteId = currentNote.id;
+        // relatedNotes will be set by API call
+        return true;
+    },
+
+    exitRelatedMode() {
+        this.mode = this.previousMode;
+        this.relatedNotes = [];
+        this.parentNoteId = null;
+        this.relatedIndex = 0;
+    },
+
+    nextRelated() {
+        if (this.relatedNotes.length === 0) return;
+        this.relatedIndex = (this.relatedIndex + 1) % this.relatedNotes.length;
+    },
+
+    // Get count of related notes for current note
+    getRelatedCount() {
+        const currentNote = this.getCurrentNote();
+        if (!currentNote || !currentNote.tags) return 0;
+
+        const currentTags = new Set(currentNote.tags.split(',').map(t => t.trim()).filter(Boolean));
+        if (currentTags.size === 0) return 0;
+
+        // Count notes with at least one common tag
+        return this.allNotes.filter(note => {
+            if (note.id === currentNote.id) return false;
+            if (!note.tags) return false;
+
+            const noteTags = note.tags.split(',').map(t => t.trim()).filter(Boolean);
+            return noteTags.some(tag => currentTags.has(tag));
+        }).length;
     }
 };

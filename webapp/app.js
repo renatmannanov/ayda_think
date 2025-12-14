@@ -72,9 +72,13 @@ function setupEventListeners() {
 
         // Back button
         if (e.target.matches('#btnBack')) {
-            state.goBack();
-            ui.render();
-            api.haptic('light');
+            if (state.mode === 'related') {
+                handleExitRelated();
+            } else {
+                state.goBack();
+                ui.render();
+                api.haptic('light');
+            }
         }
     });
 
@@ -116,6 +120,16 @@ function setupEventListeners() {
         // Next
         if (e.target.matches('#btnNext')) {
             handleNext();
+        }
+
+        // Related button (enter related mode)
+        if (e.target.matches('#btnRelated') && !e.target.disabled) {
+            await handleEnterRelated();
+        }
+
+        // Next related (in related mode)
+        if (e.target.matches('#btnNextRelated')) {
+            handleNextRelated();
         }
 
         // Open channel
@@ -226,6 +240,43 @@ function handleOpenChannel() {
     } else {
         api.showAlert('Ссылка на канал недоступна');
     }
+}
+
+// Handle enter related mode
+async function handleEnterRelated() {
+    const note = state.getCurrentNote();
+    if (!note) return;
+
+    // Enter related mode
+    state.enterRelatedMode();
+
+    // Fetch related notes from API
+    const userId = api.getUserId();
+    try {
+        const relatedNotes = await api.fetchRelatedNotes(note.id, userId);
+        state.setRelatedNotes(relatedNotes, note.id);
+        ui.render();
+        api.haptic('medium');
+    } catch (error) {
+        console.error('Error fetching related notes:', error);
+        state.exitRelatedMode();
+        api.showAlert('Ошибка загрузки связей');
+        ui.render();
+    }
+}
+
+// Handle exit related mode
+function handleExitRelated() {
+    state.exitRelatedMode();
+    ui.render();
+    api.haptic('light');
+}
+
+// Handle next related note
+function handleNextRelated() {
+    state.nextRelated();
+    ui.render();
+    api.haptic('light');
 }
 
 // Start the app

@@ -47,12 +47,21 @@ export const ui = {
 
     // Render header based on current mode
     renderHeader() {
-        const { mode, filteredNotes, currentIndex, currentTag, selectedMonth, selectedYear } = state;
-        const count = filteredNotes.length;
-        const counter = count > 0 ? `${currentIndex + 1}/${count}` : '0/0';
+        const { mode, filteredNotes, currentIndex, currentTag, selectedMonth, selectedYear, relatedNotes, relatedIndex } = state;
 
-        if (mode === 'tag' || mode === 'notag' || mode === 'date') {
+        if (mode === 'related') {
+            // Related mode: show "← К записи" and related counter
+            const count = relatedNotes.length;
+            const counter = count > 0 ? `связь ${relatedIndex + 1}/${count}` : 'связь 0/0';
+
+            this.elements.header.innerHTML = `
+                <button class="btn-back" id="btnBack">← К записи</button>
+                <span class="counter">${counter}</span>
+            `;
+        } else if (mode === 'tag' || mode === 'notag' || mode === 'date') {
             // Back mode: show back button and filter title
+            const count = filteredNotes.length;
+            const counter = count > 0 ? `${currentIndex + 1}/${count}` : '0/0';
             let title = '';
             if (mode === 'tag') title = currentTag;
             if (mode === 'notag') title = '⚠️ без тега';
@@ -67,6 +76,9 @@ export const ui = {
             `;
         } else {
             // Toggle mode: show Все/Фокус toggle
+            const count = filteredNotes.length;
+            const counter = count > 0 ? `${currentIndex + 1}/${count}` : '0/0';
+
             this.elements.header.innerHTML = `
                 <div class="toggle">
                     <button class="toggle-btn ${mode === 'all' ? 'active' : ''}" data-mode="all">Все</button>
@@ -138,6 +150,11 @@ export const ui = {
                 icon: '📅',
                 title: `Нет записей за ${monthNames[selectedMonth]} ${selectedYear}`,
                 subtitle: ''
+            },
+            related: {
+                icon: '🔗',
+                title: 'Нет связанных записей',
+                subtitle: 'Добавь теги чтобы находить связи'
             }
         };
 
@@ -163,12 +180,40 @@ export const ui = {
 
         const focusClass = note.status === 'focus' ? 'active' : '';
 
-        this.elements.actions.innerHTML = `
-            <button class="action-btn focus ${focusClass}" id="btnFocus">🎯 Фокус</button>
-            <button class="action-btn done" id="btnDone">✓ Готово</button>
-            <button class="action-btn next" id="btnNext">Дальше →</button>
-            <button class="action-btn channel" id="btnChannel">↗ В канал</button>
-        `;
+        if (state.mode === 'related') {
+            // Related mode: different navigation buttons
+            this.elements.actions.innerHTML = `
+                <div class="actions-left">
+                    <button class="action-btn focus ${focusClass}" id="btnFocus">🎯 Фокус</button>
+                    <button class="action-btn done" id="btnDone">✓ Готово</button>
+                </div>
+                <div class="actions-right">
+                    <button class="action-btn arrow" id="btnBack">←</button>
+                    <span class="actions-separator">|</span>
+                    <button class="action-btn arrow" id="btnNextRelated">↓</button>
+                    <span class="actions-separator">|</span>
+                    <button class="action-btn arrow" id="btnChannel">↗</button>
+                </div>
+            `;
+        } else {
+            // Normal mode: show related count
+            const relatedCount = state.getRelatedCount();
+            const isRelatedDisabled = relatedCount === 0;
+
+            this.elements.actions.innerHTML = `
+                <div class="actions-left">
+                    <button class="action-btn focus ${focusClass}" id="btnFocus">🎯 Фокус</button>
+                    <button class="action-btn done" id="btnDone">✓ Готово</button>
+                </div>
+                <div class="actions-right">
+                    <button class="action-btn arrow" id="btnNext">→</button>
+                    <span class="actions-separator">|</span>
+                    <button class="action-btn ${isRelatedDisabled ? 'disabled' : ''}" id="btnRelated" ${isRelatedDisabled ? 'disabled' : ''}>↓ ${relatedCount}</button>
+                    <span class="actions-separator">|</span>
+                    <button class="action-btn arrow" id="btnChannel">↗</button>
+                </div>
+            `;
+        }
     },
 
     // Show date picker

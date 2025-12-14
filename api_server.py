@@ -3,13 +3,16 @@ from fastapi.responses import FileResponse
 from config import config
 from storage.google_sheets import GoogleSheetsStorage
 from services import NoteService
-from schemas import StatusUpdate, NotesResponse
+from services.relation_service import RelationService
+from schemas import StatusUpdate, NotesResponse, RelatedNotesResponse
+from bot.utils import get_user_spreadsheet
 
 app = FastAPI()
 
-# Initialize storage and service
+# Initialize storage and services
 storage = GoogleSheetsStorage(credentials_path=config['credentials_path'])
 note_service = NoteService(storage)
+relation_service = RelationService(storage)
 
 @app.get("/")
 async def root():
@@ -73,18 +76,59 @@ async def get_notes(user_id: int = Query(None)):
         # If no user_id provided, return demo data
         if user_id is None:
             return note_service.get_demo_notes()
-        
+
         response = await note_service.get_user_notes(user_id)
-        
+
         if response is None:
              raise HTTPException(status_code=404, detail="User not registered")
-             
+
         return response
-        
+
     except HTTPException:
         raise
     except Exception as e:
         print(f"Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/notes/{note_id}/related", response_model=RelatedNotesResponse)
+async def get_related_notes(note_id: str, user_id: int = Query(...)):
+    """
+    Get notes related to the specified note based on common tags.
+
+    Args:
+        note_id: The ID of the note to find relations for (Column A in Google Sheets)
+        user_id: The Telegram user ID
+
+    Returns:
+        RelatedNotesResponse with sorted list of related notes
+
+    Algorithm:
+        1. Finds all notes with at least one common tag
+        2. Sorts by: common_tags_count DESC, created_at DESC
+        3. Includes all statuses (new, focus, done, archived)
+    """
+    try:
+        # Get user's spreadsheet ID
+        spreadsheet_id = get_user_spreadsheet(user_id)
+        if not spreadsheet_id:
+            raise HTTPException(status_code=404, detail="User not registered")
+
+        # Compute related notes
+        related_notes = await relation_service.get_related_notes(
+            note_id=note_id,
+            spreadsheet_id=spreadsheet_id
+        )
+
+        return RelatedNotesResponse(
+            related=related_notes,
+            total=len(related_notes),
+            note_id=note_id
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error fetching related notes: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
