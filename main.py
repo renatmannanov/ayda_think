@@ -38,9 +38,9 @@ def main():
     # Handle edited channel posts
     application.add_handler(MessageHandler(filters.UpdateType.EDITED_CHANNEL_POST, edited_channel_post_handler))
     
-    # Handle all messages (text, forwards, media with captions) - but NOT edited
+    # Handle all messages (text, forwards, media with captions, voice/audio) - but NOT edited
     application.add_handler(MessageHandler(
-        (filters.TEXT | filters.CAPTION | filters.FORWARDED) & ~filters.COMMAND & ~filters.UpdateType.EDITED_MESSAGE, 
+        (filters.TEXT | filters.CAPTION | filters.FORWARDED | filters.VOICE | filters.AUDIO) & ~filters.COMMAND & ~filters.UpdateType.EDITED_MESSAGE,
         handle_message
     ))
     

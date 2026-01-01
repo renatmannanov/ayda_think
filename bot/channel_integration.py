@@ -6,6 +6,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 from telegram.constants import ParseMode
 from .utils import get_user_spreadsheet
+from .voice_handler import process_voice_message, has_voice_or_audio
 
 CHANNEL_MAP_FILE = 'channel_map.json'
 
@@ -110,51 +111,104 @@ async def channel_post_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         return
 
     post = update.channel_post
-    content = post.text or post.caption or ""
+    storage = context.bot_data['storage']
+
+    # Handle voice messages from channel
+    if has_voice_or_audio(post):
+        # Step 1: Send "processing" reply to channel
+        try:
+            status_msg = await context.bot.send_message(
+                chat_id=channel_id,
+                text="🎤 Транскрибирую и форматирую...",
+                reply_to_message_id=post.message_id
+            )
+        except Exception as e:
+            logging.error(f"Cannot reply to channel (not admin?): {e}")
+            # Notify user via DM
+            try:
+                await context.bot.send_message(
+                    chat_id=user_id,
+                    text=f"⚠️ Не могу отправить сообщение в канал.\n"
+                         f"Сделайте бота администратором канала с правом отправки сообщений."
+                )
+            except:
+                pass
+            status_msg = None
+
+        # Step 2: Transcribe
+        voice_data = await process_voice_message(post, context, improve=True)
+
+        if voice_data:
+            content = voice_data["content"]
+            message_type = "channel_voice"
+            logging.info(f"Transcribed voice from channel: {len(content)} chars")
+
+            # Step 3: Edit reply with transcription
+            if status_msg:
+                try:
+                    await status_msg.edit_text(content)
+                except Exception as e:
+                    logging.error(f"Error editing channel message: {e}")
+
+            # Use transcription message ID for saving
+            save_message_id = status_msg.message_id if status_msg else post.message_id
+        else:
+            content = "[Voice message - transcription unavailable]"
+            message_type = "channel_post"
+            logging.warning("Voice transcription failed for channel post")
+            if status_msg:
+                try:
+                    await status_msg.edit_text("❌ Не удалось расшифровать голосовое сообщение.")
+                except:
+                    pass
+            save_message_id = post.message_id
+    else:
+        content = post.text or post.caption or ""
+        message_type = "channel_post"
+        save_message_id = post.message_id
+
     tags = [word for word in content.split() if word.startswith('#')]
-    
+
     # Construct note data
     note_data = {
-        'message_id': post.message_id,
+        'message_id': save_message_id,  # Use transcription msg ID for voice
         'content': content,
         'tags': tags,
-        'reply_to_message_id': None,
-        'message_type': 'channel_post',
+        'reply_to_message_id': post.message_id if has_voice_or_audio(post) else None,
+        'message_type': message_type,
         'source_chat_id': channel_id,
         'source_chat_link': '',
         'telegram_username': post.chat.username or post.chat.title
     }
-    
+
     # Handle public channel links better if username exists
     if post.chat.username:
         note_data['source_chat_link'] = f"https://t.me/{post.chat.username}/{post.message_id}"
     else:
-         # Rough approximation for private channels (might not work for all)
-         # Channel IDs start with -100, remove that for link
+        # Rough approximation for private channels (might not work for all)
+        # Channel IDs start with -100, remove that for link
         cid_str = str(channel_id)
         if cid_str.startswith('-100'):
-             cid_str = cid_str[4:]
+            cid_str = cid_str[4:]
         note_data['source_chat_link'] = f"https://t.me/c/{cid_str}/{post.message_id}"
 
-
-    storage = context.bot_data['storage']
     try:
         await storage.save_note(spreadsheet_id, note_data)
         logging.info(f"Saved channel post {post.message_id} from {channel_id} for user {user_id}")
-        
-        # Clone (copy) the message to the bot's chat with the user
-        try:
-            cloned_msg = await context.bot.copy_message(
-                chat_id=user_id,
-                from_chat_id=channel_id,
-                message_id=post.message_id
-            )
-            # Save mapping for future edits
-            save_message_mapping(channel_id, post.message_id, cloned_msg.message_id)
-            
-        except Exception as e:
-            logging.error(f"Error copying message to user {user_id}: {e}")
-            
+
+        # Clone (copy) the message to the bot's chat with the user (skip for voice - already have transcription)
+        if not has_voice_or_audio(post):
+            try:
+                cloned_msg = await context.bot.copy_message(
+                    chat_id=user_id,
+                    from_chat_id=channel_id,
+                    message_id=post.message_id
+                )
+                # Save mapping for future edits
+                save_message_mapping(channel_id, post.message_id, cloned_msg.message_id)
+            except Exception as e:
+                logging.error(f"Error copying message to user {user_id}: {e}")
+
     except Exception as e:
         logging.error(f"Error saving channel post: {e}")
 

@@ -33,9 +33,13 @@ def load_config():
         print(f"Error: Credentials file not found at: {credentials_path}")
         sys.exit(1)
 
+    # OpenAI API key (optional - for voice transcription)
+    openai_api_key = os.getenv("OPENAI_API_KEY")
+
     return {
         "bot_token": bot_token,
-        "credentials_path": credentials_path
+        "credentials_path": credentials_path,
+        "openai_api_key": openai_api_key
     }
 
 # Load config on import to fail fast
