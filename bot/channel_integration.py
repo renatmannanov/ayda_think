@@ -90,17 +90,25 @@ async def channel_post_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     Handles posts in channels.
     """
     logging.info(f"Received channel post update: {update}")
-    
+
     if not update.channel_post:
         logging.info("Update is not a channel_post")
         return
 
     channel_id = update.channel_post.chat.id
+    post = update.channel_post
+    post_text = post.text or ""
+
+    # Check if this is a /tag command in channel
+    if post_text.startswith('/tag') and post.reply_to_message:
+        await handle_channel_tag_command(update, context)
+        return
+
     logging.info(f"Processing post from channel {channel_id}")
-    
+
     user_id = get_user_for_channel(channel_id)
     logging.info(f"Mapped user_id: {user_id}")
-    
+
     if not user_id:
         # Channel not linked to any user
         return
@@ -110,7 +118,6 @@ async def channel_post_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         logging.warning(f"User {user_id} linked to channel {channel_id} has no spreadsheet.")
         return
 
-    post = update.channel_post
     storage = context.bot_data['storage']
 
     # Handle voice messages from channel
@@ -271,3 +278,93 @@ async def edited_channel_post_handler(update: Update, context: ContextTypes.DEFA
             logging.info(f"Updated cloned message {cloned_msg_id} for user {user_id}")
         except Exception as e:
             logging.error(f"Error updating cloned message: {e}")
+
+
+async def handle_channel_tag_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Handle /tag command in channel.
+    Usage: Reply to a message with /tag #one #two
+    """
+    post = update.channel_post
+    channel_id = post.chat.id
+    command_text = post.text or ""
+
+    logging.info(f"Processing /tag command in channel {channel_id}")
+
+    user_id = get_user_for_channel(channel_id)
+    if not user_id:
+        return
+
+    spreadsheet_id = get_user_spreadsheet(user_id)
+    if not spreadsheet_id:
+        return
+
+    # Extract tags from command
+    tags = [word for word in command_text.split() if word.startswith('#')]
+    if not tags:
+        logging.info("No tags provided in /tag command")
+        # Delete the command message anyway
+        try:
+            await context.bot.delete_message(chat_id=channel_id, message_id=post.message_id)
+        except:
+            pass
+        return
+
+    replied_msg = post.reply_to_message
+    replied_msg_id = replied_msg.message_id
+
+    # Get current content of replied message
+    current_content = replied_msg.text or replied_msg.caption or ""
+
+    # Append tags to content
+    tags_string = " ".join(tags)
+    new_content = f"{current_content}\n\n{tags_string}" if current_content else tags_string
+
+    # Extract all tags from new content
+    all_tags = [word for word in new_content.split() if word.startswith('#')]
+
+    # Update in Google Sheets
+    storage = context.bot_data['storage']
+    try:
+        await storage.update_note(spreadsheet_id, replied_msg_id, new_content, all_tags)
+        logging.info(f"Added tags {tags} to channel message {replied_msg_id}")
+    except Exception as e:
+        logging.error(f"Error updating tags in sheet: {e}")
+
+    # Try to edit the replied message in channel
+    try:
+        if replied_msg.text:
+            await context.bot.edit_message_text(
+                chat_id=channel_id,
+                message_id=replied_msg_id,
+                text=new_content
+            )
+        elif replied_msg.caption:
+            await context.bot.edit_message_caption(
+                chat_id=channel_id,
+                message_id=replied_msg_id,
+                caption=new_content
+            )
+        logging.info(f"Edited channel message {replied_msg_id} with new tags")
+    except Exception as e:
+        logging.info(f"Could not edit channel message: {e}")
+
+    # Also update the cloned message in user's bot chat
+    cloned_msg_id = get_cloned_message_id(channel_id, replied_msg_id)
+    if cloned_msg_id:
+        try:
+            await context.bot.edit_message_text(
+                chat_id=user_id,
+                message_id=cloned_msg_id,
+                text=new_content
+            )
+            logging.info(f"Updated cloned message {cloned_msg_id} with tags")
+        except Exception as e:
+            logging.error(f"Error updating cloned message with tags: {e}")
+
+    # Delete the /tag command message
+    try:
+        await context.bot.delete_message(chat_id=channel_id, message_id=post.message_id)
+        logging.info(f"Deleted /tag command from channel")
+    except Exception as e:
+        logging.warning(f"Could not delete /tag command: {e}")
