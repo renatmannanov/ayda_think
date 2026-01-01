@@ -196,8 +196,21 @@ async def channel_post_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         await storage.save_note(spreadsheet_id, note_data)
         logging.info(f"Saved channel post {post.message_id} from {channel_id} for user {user_id}")
 
-        # Clone (copy) the message to the bot's chat with the user (skip for voice - already have transcription)
-        if not has_voice_or_audio(post):
+        # Clone/send to user's bot chat
+        if has_voice_or_audio(post):
+            # For voice: send transcription text to user
+            try:
+                user_msg = await context.bot.send_message(
+                    chat_id=user_id,
+                    text=content
+                )
+                # Save mapping: use status_msg.message_id (transcription in channel) for edits
+                if status_msg:
+                    save_message_mapping(channel_id, status_msg.message_id, user_msg.message_id)
+            except Exception as e:
+                logging.error(f"Error sending transcription to user {user_id}: {e}")
+        else:
+            # For non-voice: copy the original message
             try:
                 cloned_msg = await context.bot.copy_message(
                     chat_id=user_id,
@@ -215,6 +228,7 @@ async def channel_post_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 async def edited_channel_post_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Handles edited posts in channels.
+    Works for both regular posts and transcription replies (voice messages).
     """
     if not update.edited_channel_post:
         return
@@ -222,7 +236,7 @@ async def edited_channel_post_handler(update: Update, context: ContextTypes.DEFA
     post = update.edited_channel_post
     channel_id = post.chat.id
     user_id = get_user_for_channel(channel_id)
-    
+
     if not user_id:
         return
 
@@ -232,31 +246,28 @@ async def edited_channel_post_handler(update: Update, context: ContextTypes.DEFA
 
     new_content = post.text or post.caption or ""
     new_tags = [word for word in new_content.split() if word.startswith('#')]
-    
+
     # 1. Update Google Sheet
+    # For voice transcriptions, the message_id in sheet is the transcription message ID (not voice)
+    # For regular posts, it's the post.message_id
+    # Either way, we use post.message_id since that's what we're editing
     storage = context.bot_data['storage']
     try:
-        # We use the original channel post ID as the message_id in the sheet
         await storage.update_note(spreadsheet_id, post.message_id, new_content, new_tags)
         logging.info(f"Updated note for channel post {post.message_id}")
     except Exception as e:
         logging.error(f"Error updating note in sheet: {e}")
 
-    # 2. Update Cloned Message in Bot Chat
+    # 2. Update Cloned/Sent Message in Bot Chat
     cloned_msg_id = get_cloned_message_id(channel_id, post.message_id)
     if cloned_msg_id:
         try:
-            if post.text:
-                await context.bot.edit_message_text(
-                    chat_id=user_id,
-                    message_id=cloned_msg_id,
-                    text=new_content
-                )
-            elif post.caption:
-                await context.bot.edit_message_caption(
-                    chat_id=user_id,
-                    message_id=cloned_msg_id,
-                    caption=new_content
-                )
+            # Both regular posts and transcriptions are text messages in user's chat
+            await context.bot.edit_message_text(
+                chat_id=user_id,
+                message_id=cloned_msg_id,
+                text=new_content
+            )
+            logging.info(f"Updated cloned message {cloned_msg_id} for user {user_id}")
         except Exception as e:
             logging.error(f"Error updating cloned message: {e}")
