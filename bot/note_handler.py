@@ -88,25 +88,26 @@ async def save_note(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Case 1: Media forward with caption (save both)
     if is_forward and has_media and caption:
+        reply_to_id = update.message.reply_to_message.message_id if update.message.reply_to_message else None
         caption_tags = [word for word in caption.split() if word.startswith('#')]
         caption_note = {
             'message_id': update.message.message_id,
             'content': caption,
             'tags': caption_tags,
-            'reply_to_message_id': None,
+            'reply_to_message_id': reply_to_id,
             'message_type': 'general',
             'source_chat_id': update.effective_chat.id,
             'source_chat_link': '',
             'telegram_username': ''
         }
         messages_to_save.append(caption_note)
-        
+
         telegram_username = get_forward_username(update.message)
         forward_note = {
             'message_id': update.message.message_id,
             'content': '[Media]',
             'tags': [],
-            'reply_to_message_id': None,
+            'reply_to_message_id': reply_to_id,
             'message_type': 'forwarded',
             'source_chat_id': get_forward_chat_id(update.message),
             'source_chat_link': get_forward_chat_link(update.message),
