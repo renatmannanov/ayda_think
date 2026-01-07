@@ -106,6 +106,13 @@ async def channel_post_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
     logging.info(f"Processing post from channel {channel_id}")
 
+    # Debug: log reply_to_message details
+    if post.reply_to_message:
+        rtm = post.reply_to_message
+        logging.info(f"DEBUG reply_to_message: chat_id={rtm.chat.id}, msg_id={rtm.message_id}, chat_type={rtm.chat.type}")
+    else:
+        logging.info("DEBUG: No reply_to_message")
+
     user_id = get_user_for_channel(channel_id)
     logging.info(f"Mapped user_id: {user_id}")
 
