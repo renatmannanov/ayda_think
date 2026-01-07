@@ -56,6 +56,19 @@ export const api = {
             throw error;
         }
     },
+
+    async fetchReplyChain(noteId, userId) {
+        try {
+            const response = await fetch(`/api/notes/${noteId}/replies?user_id=${userId}`);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return await response.json();
+        } catch (error) {
+            console.error('Error fetching reply chain:', error);
+            throw error;
+        }
+    },
     
     showConfirm(message, callback) {
         this.tg.showConfirm(message, callback);

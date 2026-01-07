@@ -50,12 +50,56 @@ export const ui = {
         const { mode, filteredNotes, currentIndex, currentTag, selectedMonth, selectedYear, relatedNotes, relatedIndex } = state;
 
         if (mode === 'related') {
-            // Related mode: show "← К записи" and related counter
+            // Related mode (tags): show "← К записи" and related counter
             const count = relatedNotes.length;
             const counter = count > 0 ? `связь ${relatedIndex + 1}/${count}` : 'связь 0/0';
 
             this.elements.header.innerHTML = `
                 <button class="btn-back" id="btnBack">← К записи</button>
+                <span class="counter">${counter}</span>
+            `;
+        } else if (mode === 'reply_related') {
+            // Reply related mode: show branch info and position
+            const { replyChain, replyIndex, replyStats, currentBranchChildId } = state;
+            const chainLength = replyChain.length;
+            const counter = chainLength > 0 ? `связь ${replyIndex + 1}/${chainLength}` : 'связь 0/0';
+
+            let branchInfo = '';
+            const currentNote = state.getCurrentNote();
+
+            if (currentNote) {
+                // Case 1: current note has multiple children and we're selecting which one
+                if (replyStats && replyStats.down > 1) {
+                    const children = replyChain.filter(n =>
+                        String(n.reply_to_message_id) === String(currentNote.telegram_message_id)
+                    );
+                    if (children.length > 1) {
+                        let selectedIdx = 0;
+                        if (currentBranchChildId) {
+                            const idx = children.findIndex(c => c.id === currentBranchChildId);
+                            if (idx >= 0) selectedIdx = idx;
+                        }
+                        branchInfo = `ветка ${selectedIdx + 1}/${children.length}`;
+                    }
+                }
+
+                // Case 2: current note has siblings (we ARE on a branch)
+                if (!branchInfo && currentNote.reply_to_message_id) {
+                    const siblings = replyChain.filter(n =>
+                        String(n.reply_to_message_id) === String(currentNote.reply_to_message_id)
+                    );
+                    if (siblings.length > 1) {
+                        const myIdx = siblings.findIndex(s => s.id === currentNote.id);
+                        if (myIdx >= 0) {
+                            branchInfo = `ветка ${myIdx + 1}/${siblings.length}`;
+                        }
+                    }
+                }
+            }
+
+            this.elements.header.innerHTML = `
+                <button class="btn-back" id="btnBack">← К записи</button>
+                ${branchInfo ? `<span class="header-center">${branchInfo}</span>` : ''}
                 <span class="counter">${counter}</span>
             `;
         } else if (mode === 'tag' || mode === 'notag' || mode === 'date') {
@@ -191,34 +235,79 @@ export const ui = {
         const focusClass = note.status === 'focus' ? 'active' : '';
 
         if (state.mode === 'related') {
-            // Related mode: different navigation buttons
+            // Related mode (tags): navigation with ↑ ↓
+            const { relatedNotes, relatedIndex } = state;
+            const canGoUp = relatedIndex > 0;
+            const canGoDown = relatedIndex < relatedNotes.length - 1;
+
             this.elements.actions.innerHTML = `
                 <div class="actions-left">
-                    <button class="action-btn focus ${focusClass}" id="btnFocus">🎯 Фокус</button>
-                    <button class="action-btn done" id="btnDone">✓ Готово</button>
+                    <button class="action-btn focus ${focusClass}" id="btnFocus"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></button>
+                    <button class="action-btn done" id="btnDone"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>
+                </div>
+                <div class="actions-center">
+                    <button class="action-btn arrow ${canGoUp ? '' : 'disabled'}" id="btnPrevRelated" ${canGoUp ? '' : 'disabled'}>↑</button>
+                    <button class="action-btn arrow ${canGoDown ? '' : 'disabled'}" id="btnNextRelated" ${canGoDown ? '' : 'disabled'}>↓</button>
                 </div>
                 <div class="actions-right">
                     <button class="action-btn arrow" id="btnBackArrow">←</button>
                     <span class="actions-separator">|</span>
-                    <button class="action-btn arrow" id="btnNextRelated">↓</button>
+                    <button class="action-btn arrow" id="btnChannel">↗</button>
+                </div>
+            `;
+        } else if (state.mode === 'reply_related') {
+            // Reply related mode: tree navigation with ↑N ↓N ↔N
+            const stats = state.replyStats || { up: 0, down: 0, branches: 0 };
+
+            const upBtn = stats.up > 0
+                ? `<button class="action-btn tree-nav" id="btnReplyUp">↑${stats.up}</button>`
+                : `<button class="action-btn tree-nav disabled" disabled>↑0</button>`;
+
+            const downBtn = stats.down > 0
+                ? `<button class="action-btn tree-nav" id="btnReplyDown">↓${stats.down}</button>`
+                : `<button class="action-btn tree-nav disabled" disabled>↓0</button>`;
+
+            // Always show branch button (disabled if no branches)
+            const branchBtn = stats.down > 1
+                ? `<button class="action-btn tree-nav" id="btnReplyBranch">↔${stats.down}</button>`
+                : `<button class="action-btn tree-nav disabled" disabled>↔0</button>`;
+
+            this.elements.actions.innerHTML = `
+                <div class="actions-left">
+                    <button class="action-btn focus ${focusClass}" id="btnFocus"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></button>
+                    <button class="action-btn done" id="btnDone"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>
+                </div>
+                <div class="actions-center">
+                    ${upBtn}
+                    ${downBtn}
+                    ${branchBtn}
+                </div>
+                <div class="actions-right">
+                    <button class="action-btn arrow" id="btnBackArrow">←</button>
                     <span class="actions-separator">|</span>
                     <button class="action-btn arrow" id="btnChannel">↗</button>
                 </div>
             `;
         } else {
-            // Normal mode: show related count
-            const relatedCount = state.getRelatedCount();
-            const isRelatedDisabled = relatedCount === 0;
+            // Normal mode: show connection buttons #N ↗N
+            const tagsCount = state.getRelatedCount();
+            const replyCount = state.getReplyCount();
+            const isTagsDisabled = tagsCount === 0;
+            const isReplyDisabled = replyCount === 0;
 
             this.elements.actions.innerHTML = `
                 <div class="actions-left">
-                    <button class="action-btn focus ${focusClass}" id="btnFocus">🎯 Фокус</button>
-                    <button class="action-btn done" id="btnDone">✓ Готово</button>
+                    <button class="action-btn focus ${focusClass}" id="btnFocus"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></button>
+                    <button class="action-btn done" id="btnDone"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>
+                </div>
+                <div class="actions-center">
+                    <button class="action-btn ${isTagsDisabled ? 'disabled' : ''}" id="btnRelated" ${isTagsDisabled ? 'disabled' : ''}>#${tagsCount}</button>
+                    <button class="action-btn ${isReplyDisabled ? 'disabled' : ''}" id="btnReplyRelated" ${isReplyDisabled ? 'disabled' : ''}>↗${replyCount}</button>
                 </div>
                 <div class="actions-right">
-                    <button class="action-btn arrow" id="btnNext">→</button>
+                    <button class="action-btn arrow" id="btnPrev">←</button>
                     <span class="actions-separator">|</span>
-                    <button class="action-btn ${isRelatedDisabled ? 'disabled' : ''}" id="btnRelated" ${isRelatedDisabled ? 'disabled' : ''}>↓ ${relatedCount}</button>
+                    <button class="action-btn arrow" id="btnNext">→</button>
                     <span class="actions-separator">|</span>
                     <button class="action-btn arrow" id="btnChannel">↗</button>
                 </div>

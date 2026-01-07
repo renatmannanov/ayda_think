@@ -4,7 +4,7 @@ from config import config
 from storage.google_sheets import GoogleSheetsStorage
 from services import NoteService
 from services.relation_service import RelationService
-from schemas import StatusUpdate, NotesResponse, RelatedNotesResponse
+from schemas import StatusUpdate, NotesResponse, RelatedNotesResponse, ReplyChainResponse
 from bot.utils import get_user_spreadsheet
 
 app = FastAPI()
@@ -130,6 +130,51 @@ async def get_related_notes(note_id: str, user_id: int = Query(...)):
     except Exception as e:
         print(f"Error fetching related notes: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/notes/{note_id}/replies", response_model=ReplyChainResponse)
+async def get_reply_chain(note_id: str, user_id: int = Query(...)):
+    """
+    Get reply chain for the specified note.
+
+    Args:
+        note_id: The ID of the note to build chain for
+        user_id: The Telegram user ID
+
+    Returns:
+        ReplyChainResponse with chain, stats, and navigation info
+
+    Algorithm:
+        1. Finds ancestors (path up to root)
+        2. Finds descendants (following first reply at each level)
+        3. Returns chain with navigation stats
+    """
+    try:
+        # Get user's spreadsheet ID
+        spreadsheet_id = get_user_spreadsheet(user_id)
+        if not spreadsheet_id:
+            raise HTTPException(status_code=404, detail="User not registered")
+
+        # Build reply chain
+        result = await relation_service.get_reply_chain(
+            note_id=note_id,
+            spreadsheet_id=spreadsheet_id
+        )
+
+        return ReplyChainResponse(
+            chain=result['chain'],
+            current_index=result['current_index'],
+            stats=result['stats'],
+            branches=result['branches'],
+            note_id=note_id
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error fetching reply chain: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 if __name__ == "__main__":
     import uvicorn

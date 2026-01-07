@@ -230,20 +230,55 @@ button {
     min-height: 56px;
 }
 
+/* Fixed width blocks for consistent layout */
+.actions-left {
+    display: flex;
+    gap: 0.75rem;
+    width: 80px;
+    flex-shrink: 0;
+}
+
+.actions-center {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    flex: 1;
+}
+
+.actions-right {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    width: 80px;
+    flex-shrink: 0;
+}
+
+.actions-separator {
+    color: var(--gray-200);
+    font-size: 1rem;
+    user-select: none;
+}
+
+/* Base button styles - unified size */
 .action-btn {
     background: none;
     border: none;
-    padding: 0;
-    font-size: 0.875rem;
+    padding: 0.25rem;
+    font-size: 1rem;
     transition: color 0.2s, opacity 0.2s;
+    line-height: 1;
 }
 
 .action-btn:active {
     opacity: 0.7;
 }
 
+/* Left buttons: focus and done */
 .action-btn.focus {
     color: var(--gray-400);
+    font-size: 1.125rem;
 }
 
 .action-btn.focus:hover {
@@ -254,52 +289,24 @@ button {
     color: var(--orange-500);
 }
 
+.action-btn svg {
+    display: block;
+    stroke: currentColor;
+}
+
 .action-btn.done {
     color: var(--green-600);
+    font-size: 1.125rem;
 }
 
 .action-btn.done:hover {
     color: #15803d;
-    /* green-700 */
 }
 
-.action-btn.next {
-    color: var(--gray-500);
-}
-
-.action-btn.next:hover {
-    color: var(--gray-700);
-}
-
-.action-btn.channel {
-    color: var(--gray-400);
-}
-
-.action-btn.channel:hover {
-    color: var(--gray-600);
-}
-
-/* Related mode specific */
-.actions-left {
-    display: flex;
-    gap: 1rem;
-}
-
-.actions-right {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.actions-separator {
-    color: var(--gray-200);
-    font-size: 0.875rem;
-    user-select: none;
-}
-
+/* Arrow buttons */
 .action-btn.arrow {
-    font-size: 1.25rem;
-    padding: 0 0.25rem;
+    font-size: 1rem;
+    padding: 0.25rem;
     color: var(--gray-500);
 }
 
@@ -307,14 +314,41 @@ button {
     color: var(--gray-700);
 }
 
-.action-btn.disabled {
+.action-btn.disabled,
+.action-btn:disabled {
     color: var(--gray-300);
     cursor: default;
-    opacity: 0.5;
+    pointer-events: none;
 }
 
-.action-btn.disabled:hover {
+.action-btn.disabled:hover,
+.action-btn:disabled:hover {
     color: var(--gray-300);
+}
+
+/* Tree navigation buttons (↑N ↓N ↔N) */
+.action-btn.tree-nav {
+    font-size: 1rem;
+    color: var(--gray-500);
+    padding: 0.25rem;
+    min-width: 2rem;
+    text-align: center;
+}
+
+.action-btn.tree-nav:hover {
+    color: var(--gray-700);
+}
+
+.action-btn.tree-nav.disabled,
+.action-btn.tree-nav:disabled {
+    color: var(--gray-300);
+    cursor: default;
+}
+
+/* Header center for branch info */
+.header-center {
+    font-size: 0.875rem;
+    color: var(--gray-400);
 }
 
 /* Loading state */

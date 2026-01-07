@@ -72,7 +72,7 @@ function setupEventListeners() {
 
         // Back button
         if (e.target.matches('#btnBack')) {
-            if (state.mode === 'related') {
+            if (state.mode === 'related' || state.mode === 'reply_related') {
                 handleExitRelated();
             } else {
                 state.goBack();
@@ -107,38 +107,73 @@ function setupEventListeners() {
 
     // Actions events
     ui.elements.actions.addEventListener('click', async (e) => {
+        // Find the actual button (may be SVG child element)
+        const btn = e.target.closest('button');
+        if (!btn) return;
+
         // Focus toggle
-        if (e.target.matches('#btnFocus')) {
+        if (btn.matches('#btnFocus')) {
             await handleToggleFocus();
         }
 
         // Done
-        if (e.target.matches('#btnDone')) {
+        if (btn.matches('#btnDone')) {
             await handleDone();
         }
 
-        // Next
-        if (e.target.matches('#btnNext')) {
+        // Prev (main mode)
+        if (btn.matches('#btnPrev')) {
+            handlePrev();
+        }
+
+        // Next (main mode)
+        if (btn.matches('#btnNext')) {
             handleNext();
         }
 
-        // Related button (enter related mode)
-        if (e.target.matches('#btnRelated') && !e.target.disabled) {
+        // Related button (enter tags related mode)
+        if (btn.matches('#btnRelated') && !btn.disabled) {
             await handleEnterRelated();
         }
 
-        // Back arrow in related mode (exit)
-        if (e.target.matches('#btnBackArrow')) {
+        // Reply related button (enter reply related mode)
+        if (btn.matches('#btnReplyRelated') && !btn.disabled) {
+            await handleEnterReplyRelated();
+        }
+
+        // Back arrow in related modes (exit)
+        if (btn.matches('#btnBackArrow')) {
             handleExitRelated();
         }
 
-        // Next related (in related mode)
-        if (e.target.matches('#btnNextRelated')) {
+        // Prev related (in tags related mode)
+        if (btn.matches('#btnPrevRelated') && !btn.disabled) {
+            handlePrevRelated();
+        }
+
+        // Next related (in tags related mode)
+        if (btn.matches('#btnNextRelated') && !btn.disabled) {
             handleNextRelated();
         }
 
+        // Reply navigation: up
+        if (btn.matches('#btnReplyUp')) {
+            await handleReplyUp();
+        }
+
+        // Reply navigation: down
+        if (btn.matches('#btnReplyDown')) {
+            await handleReplyDown();
+        }
+
+        // Reply navigation: branch
+        if (btn.matches('#btnReplyBranch')) {
+            console.log('Branch button clicked!');
+            await handleReplyBranch();
+        }
+
         // Open channel
-        if (e.target.matches('#btnChannel')) {
+        if (btn.matches('#btnChannel')) {
             handleOpenChannel();
         }
     });
@@ -213,6 +248,15 @@ async function handleDone() {
     }
 }
 
+// Handle prev
+function handlePrev() {
+    // Go to previous note (loop around)
+    if (state.filteredNotes.length === 0) return;
+    state.currentIndex = (state.currentIndex - 1 + state.filteredNotes.length) % state.filteredNotes.length;
+    ui.render();
+    api.haptic('light');
+}
+
 // Handle next
 function handleNext() {
     state.nextNote();
@@ -276,18 +320,184 @@ async function handleEnterRelated() {
     }
 }
 
-// Handle exit related mode
+// Handle exit related mode (both tags and reply)
 function handleExitRelated() {
-    state.exitRelatedMode();
+    if (state.mode === 'reply_related') {
+        state.exitReplyRelatedMode();
+    } else {
+        state.exitRelatedMode();
+    }
     ui.render();
     api.haptic('light');
 }
 
-// Handle next related note
+// Handle prev related note (tags mode)
+function handlePrevRelated() {
+    state.prevRelated();
+    ui.render();
+    api.haptic('light');
+}
+
+// Handle next related note (tags mode)
 function handleNextRelated() {
     state.nextRelated();
     ui.render();
     api.haptic('light');
+}
+
+// Handle enter reply related mode
+async function handleEnterReplyRelated() {
+    const note = state.getCurrentNote();
+    if (!note) return;
+
+    // Enter reply related mode
+    state.enterReplyRelatedMode();
+
+    // Show loading state
+    ui.renderHeader();
+    ui.renderLoadingState('Вычисляем связи...');
+    ui.elements.actions.innerHTML = '';
+    api.haptic('light');
+
+    // Fetch reply chain from API
+    const userId = api.getUserId();
+    try {
+        const response = await api.fetchReplyChain(note.id, userId);
+        state.setReplyChain(
+            response.chain,
+            response.current_index,
+            response.stats,
+            response.branches || []
+        );
+        ui.render();
+        api.haptic('medium');
+    } catch (error) {
+        console.error('Error fetching reply chain:', error);
+        state.exitReplyRelatedMode();
+        api.showAlert('Ошибка загрузки цепочки');
+        ui.render();
+    }
+}
+
+// Handle reply navigation: up (to parent)
+async function handleReplyUp() {
+    const note = state.getCurrentNote();
+    if (!note || !note.reply_to_message_id) return;
+
+    // Find parent in chain (use string comparison)
+    const parentIndex = state.replyChain.findIndex(n =>
+        String(n.telegram_message_id) === String(note.reply_to_message_id)
+    );
+
+    if (parentIndex >= 0) {
+        // Remember current note as selected branch for the parent
+        state.currentBranchChildId = note.id;
+        state.replyIndex = parentIndex;
+        // Update stats for new position
+        const parentNote = state.replyChain[parentIndex];
+        state.replyStats = calculateReplyStats(parentNote);
+        ui.render();
+        api.haptic('light');
+    }
+}
+
+// Handle reply navigation: down (to first child)
+async function handleReplyDown() {
+    const note = state.getCurrentNote();
+    if (!note) return;
+
+    // Find all children
+    const children = state.replyChain.filter(n =>
+        String(n.reply_to_message_id) === String(note.telegram_message_id)
+    );
+
+    if (children.length === 0) return;
+
+    // Use tracked branch child or first child
+    let targetChild = children[0];
+    if (state.currentBranchChildId) {
+        const tracked = children.find(c => c.id === state.currentBranchChildId);
+        if (tracked) targetChild = tracked;
+    }
+
+    const childIndex = state.replyChain.findIndex(n => n.id === targetChild.id);
+    if (childIndex >= 0) {
+        state.replyIndex = childIndex;
+        state.currentBranchChildId = null;  // Reset for next level
+        // Update stats for new position
+        const childNote = state.replyChain[childIndex];
+        state.replyStats = calculateReplyStats(childNote);
+        ui.render();
+        api.haptic('light');
+    }
+}
+
+// Handle reply navigation: switch branch (just select next branch, don't navigate)
+async function handleReplyBranch() {
+    const note = state.getCurrentNote();
+    if (!note) return;
+
+    console.log('handleReplyBranch called, note:', note.id);
+
+    // Find all children of current note in the full chain
+    const children = state.replyChain.filter(n =>
+        String(n.reply_to_message_id) === String(note.telegram_message_id)
+    );
+
+    console.log('Children found:', children.length, children.map(c => c.id));
+
+    if (children.length <= 1) {
+        console.log('Not enough children to switch');
+        return;
+    }
+
+    // Track which child branch we're currently on
+    if (!state.currentBranchChildId) {
+        state.currentBranchChildId = children[0]?.id;
+    }
+
+    // Find current child index
+    let currentChildIdx = children.findIndex(c => c.id === state.currentBranchChildId);
+    if (currentChildIdx < 0) currentChildIdx = 0;
+
+    // Cycle to next child
+    const nextChildIdx = (currentChildIdx + 1) % children.length;
+    const nextChild = children[nextChildIdx];
+    state.currentBranchChildId = nextChild.id;
+
+    console.log('Selected branch:', nextChild.id, `(${nextChildIdx + 1}/${children.length})`);
+
+    // Update UI to show which branch is selected (but stay on current note)
+    api.haptic('light');
+    ui.render();  // Update header to show selected branch
+}
+
+// Helper: calculate reply stats for a note
+function calculateReplyStats(note) {
+    if (!note) return { up: 0, down: 0, branches: 0 };
+
+    // Count ancestors (up)
+    let up = 0;
+    let current = note;
+    while (current.reply_to_message_id) {
+        const parent = state.replyChain.find(n =>
+            String(n.telegram_message_id) === String(current.reply_to_message_id)
+        );
+        if (parent) {
+            up++;
+            current = parent;
+        } else break;
+    }
+
+    // Count direct children (down) - also used for branches
+    const children = state.replyChain.filter(n =>
+        String(n.reply_to_message_id) === String(note.telegram_message_id)
+    );
+    const down = children.length;
+
+    console.log('calculateReplyStats for', note.id, ':', { up, down, branches: down });
+
+    return { up, down, branches: down };
 }
 
 // Start the app
