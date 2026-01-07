@@ -44,6 +44,11 @@ async def get_ui_js():
     """Serve UI JS file"""
     return FileResponse("webapp/ui.js")
 
+@app.get("/gestures.js")
+async def get_gestures_js():
+    """Serve Gestures JS file"""
+    return FileResponse("webapp/gestures.js")
+
 @app.post("/api/notes/{note_id}/status")
 async def update_note_status(note_id: str, update: StatusUpdate):
     """

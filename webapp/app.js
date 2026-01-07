@@ -2,12 +2,14 @@
 import { api } from './api.js';
 import { state } from './state.js';
 import { ui } from './ui.js';
+import { gestures } from './gestures.js';
 
 // Initialize app
 async function init() {
     api.init();
     await loadNotes();
     setupEventListeners();
+    setupGestures();
     ui.render();
 }
 
@@ -212,6 +214,39 @@ function setupEventListeners() {
             ui.hideDatePicker();
             ui.render();
             api.haptic('light');
+        }
+    });
+}
+
+// Setup touch gestures for mobile
+function setupGestures() {
+    const gestureArea = ui.elements.body;
+
+    gestures.init(gestureArea, {
+        onSwipeLeft: () => {
+            // Next note
+            if (state.mode === 'related') {
+                gestures.highlightButton('#btnNextRelated');
+                handleNextRelated();
+            } else if (state.mode !== 'reply_related') {
+                gestures.highlightButton('#btnNext');
+                handleNext();
+            }
+        },
+        onSwipeRight: () => {
+            // Prev note
+            if (state.mode === 'related') {
+                gestures.highlightButton('#btnPrevRelated');
+                handlePrevRelated();
+            } else if (state.mode !== 'reply_related') {
+                gestures.highlightButton('#btnPrev');
+                handlePrev();
+            }
+        },
+        onDoubleTap: () => {
+            // Toggle focus
+            gestures.highlightButton('#btnFocus');
+            handleToggleFocus();
         }
     });
 }

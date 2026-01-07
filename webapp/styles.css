@@ -537,6 +537,71 @@ button {
 }
 
 /* ==========================================================================
+   Touch Gesture Feedback
+   ========================================================================== */
+
+/* Highlight animation for gesture feedback */
+.gesture-highlight {
+    animation: gestureHighlight 0.2s ease-out;
+}
+
+@keyframes gestureHighlight {
+    0% {
+        transform: scale(1);
+        background-color: transparent;
+    }
+    50% {
+        transform: scale(1.3);
+        background-color: rgba(249, 115, 22, 0.2);
+    }
+    100% {
+        transform: scale(1);
+        background-color: transparent;
+    }
+}
+
+/* Specific highlight for focus button */
+#btnFocus.gesture-highlight {
+    animation: gestureHighlightFocus 0.2s ease-out;
+}
+
+@keyframes gestureHighlightFocus {
+    0% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.4);
+        color: var(--orange-500);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+/* Specific highlight for navigation arrows */
+#btnPrev.gesture-highlight,
+#btnNext.gesture-highlight,
+#btnPrevRelated.gesture-highlight,
+#btnNextRelated.gesture-highlight {
+    animation: gestureHighlightArrow 0.2s ease-out;
+}
+
+@keyframes gestureHighlightArrow {
+    0% {
+        transform: scale(1);
+        color: var(--gray-500);
+    }
+    50% {
+        transform: scale(1.5);
+        color: var(--orange-500);
+    }
+    100% {
+        transform: scale(1);
+        color: var(--gray-500);
+    }
+}
+
+/* ==========================================================================
    Responsive
    ========================================================================== */
 @media (max-width: 448px) {
