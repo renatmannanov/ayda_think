@@ -176,12 +176,22 @@ async def channel_post_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
     tags = [word for word in content.split() if word.startswith('#')]
 
+    # Determine reply_to_message_id:
+    # - For voice: link transcription to original voice post
+    # - For regular posts: preserve reply chain if post is a reply to another message
+    if has_voice_or_audio(post):
+        reply_to_id = post.message_id  # Transcription replies to voice
+    elif post.reply_to_message:
+        reply_to_id = post.reply_to_message.message_id  # Preserve reply chain
+    else:
+        reply_to_id = None
+
     # Construct note data
     note_data = {
         'message_id': save_message_id,  # Use transcription msg ID for voice
         'content': content,
         'tags': tags,
-        'reply_to_message_id': post.message_id if has_voice_or_audio(post) else None,
+        'reply_to_message_id': reply_to_id,
         'message_type': message_type,
         'source_chat_id': channel_id,
         'source_chat_link': '',
