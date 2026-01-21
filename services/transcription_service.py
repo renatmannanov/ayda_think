@@ -83,6 +83,7 @@ async def improve_transcription(raw_text: str) -> str:
 - Remove filler words (um, uh, like, you know, э-э, ну, типа)
 - Fix punctuation and capitalization
 - Remove false starts and repetitions
+- Split text into logical paragraphs (separate by blank line) when topic or thought changes
 - Keep the EXACT meaning - do not add or remove information
 - Keep the same language as input
 - Output ONLY the cleaned text, nothing else"""
