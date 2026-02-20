@@ -8,7 +8,7 @@ from telegram.constants import ParseMode
 from .utils import get_user_spreadsheet
 from .voice_handler import process_voice_message, has_voice_or_audio
 
-CHANNEL_MAP_FILE = 'channel_map.json'
+CHANNEL_MAP_FILE = os.path.join('data', 'channel_map.json')
 
 def load_channel_mapping() -> Dict[str, int]:
     if not os.path.exists(CHANNEL_MAP_FILE):
@@ -29,7 +29,7 @@ def get_user_for_channel(channel_id: int) -> Optional[int]:
     mapping = load_channel_mapping()
     return mapping.get(str(channel_id))
 
-CHANNEL_MSG_MAP_FILE = 'channel_messages.json'
+CHANNEL_MSG_MAP_FILE = os.path.join('data', 'channel_messages.json')
 
 def load_message_mapping() -> Dict[str, int]:
     if not os.path.exists(CHANNEL_MSG_MAP_FILE):
