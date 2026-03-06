@@ -1,56 +1,16 @@
-import json
-import os
 import logging
-from typing import Dict, Optional
+from typing import Optional
 from telegram import Update
 from telegram.ext import ContextTypes
 from telegram.constants import ParseMode
 from .utils import get_user_spreadsheet
 from .voice_handler import process_voice_message, has_voice_or_audio
-
-CHANNEL_MAP_FILE = os.path.join('data', 'channel_map.json')
-
-def load_channel_mapping() -> Dict[str, int]:
-    if not os.path.exists(CHANNEL_MAP_FILE):
-        return {}
-    try:
-        with open(CHANNEL_MAP_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except json.JSONDecodeError:
-        return {}
-
-def save_channel_mapping(channel_id: int, user_id: int):
-    mapping = load_channel_mapping()
-    mapping[str(channel_id)] = user_id
-    with open(CHANNEL_MAP_FILE, 'w', encoding='utf-8') as f:
-        json.dump(mapping, f, indent=4)
-
-def get_user_for_channel(channel_id: int) -> Optional[int]:
-    mapping = load_channel_mapping()
-    return mapping.get(str(channel_id))
-
-CHANNEL_MSG_MAP_FILE = os.path.join('data', 'channel_messages.json')
-
-def load_message_mapping() -> Dict[str, int]:
-    if not os.path.exists(CHANNEL_MSG_MAP_FILE):
-        return {}
-    try:
-        with open(CHANNEL_MSG_MAP_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except json.JSONDecodeError:
-        return {}
-
-def save_message_mapping(channel_id: int, post_id: int, cloned_id: int):
-    mapping = load_message_mapping()
-    key = f"{channel_id}:{post_id}"
-    mapping[key] = cloned_id
-    with open(CHANNEL_MSG_MAP_FILE, 'w', encoding='utf-8') as f:
-        json.dump(mapping, f, indent=4)
-
-def get_cloned_message_id(channel_id: int, post_id: int) -> Optional[int]:
-    mapping = load_message_mapping()
-    key = f"{channel_id}:{post_id}"
-    return mapping.get(key)
+from storage.db import (
+    get_channel_user,
+    save_channel_mapping,
+    get_cloned_message_id,
+    save_message_mapping,
+)
 
 async def link_channel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
@@ -106,7 +66,7 @@ async def channel_post_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
     logging.info(f"Processing post from channel {channel_id}")
 
-    user_id = get_user_for_channel(channel_id)
+    user_id = get_channel_user(channel_id)
     logging.info(f"Mapped user_id: {user_id}")
 
     if not user_id:
@@ -145,7 +105,23 @@ async def channel_post_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         # Step 2: Transcribe
         voice_data = await process_voice_message(post, context, improve=True)
 
-        if voice_data:
+        if voice_data and voice_data.get("error") == "openai_quota":
+            error_text = (
+                "❌ OpenAI API: закончился баланс или превышен лимит.\n"
+                "Пополни баланс на platform.openai.com"
+            )
+            if status_msg:
+                try:
+                    await status_msg.edit_text(error_text)
+                except:
+                    pass
+            try:
+                await context.bot.send_message(chat_id=user_id, text=error_text)
+            except:
+                pass
+            return
+
+        if voice_data and not voice_data.get("error"):
             content = voice_data["content"]
             message_type = "channel_voice"
             logging.info(f"Transcribed voice from channel: {len(content)} chars")
@@ -252,7 +228,7 @@ async def edited_channel_post_handler(update: Update, context: ContextTypes.DEFA
 
     post = update.edited_channel_post
     channel_id = post.chat.id
-    user_id = get_user_for_channel(channel_id)
+    user_id = get_channel_user(channel_id)
 
     if not user_id:
         return
@@ -301,7 +277,7 @@ async def handle_channel_tag_command(update: Update, context: ContextTypes.DEFAU
 
     logging.info(f"Processing /tag command in channel {channel_id}")
 
-    user_id = get_user_for_channel(channel_id)
+    user_id = get_channel_user(channel_id)
     if not user_id:
         return
 

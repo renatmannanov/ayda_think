@@ -188,8 +188,14 @@ async def save_voice_note(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Step 2: Process voice message
     voice_data = await process_voice_message(message, context, improve=True)
 
-    if not voice_data:
-        await status_msg.edit_text("❌ Не удалось расшифровать голосовое сообщение.")
+    if not voice_data or voice_data.get("error"):
+        if voice_data and voice_data.get("error") == "openai_quota":
+            await status_msg.edit_text(
+                "❌ OpenAI API: закончился баланс или превышен лимит.\n"
+                "Пополни баланс на platform.openai.com"
+            )
+        else:
+            await status_msg.edit_text("❌ Не удалось расшифровать голосовое сообщение.")
         await message.set_reaction(reaction=ReactionTypeEmoji(emoji="👎"))
         return
 

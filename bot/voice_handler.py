@@ -133,6 +133,9 @@ async def process_voice_message(
 
     except Exception as e:
         logging.error(f"Voice processing error: {e}")
+        error_str = str(e).lower()
+        if "insufficient_quota" in error_str or "billing" in error_str or "rate_limit" in error_str:
+            return {"error": "openai_quota", "detail": str(e)}
         return None
 
     finally:

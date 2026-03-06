@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, DateTime
+from sqlalchemy import create_engine, Column, Integer, BigInteger, String, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
@@ -11,15 +11,33 @@ Base = declarative_base()
 class User(Base):
     """User model for storing user-spreadsheet mappings."""
     __tablename__ = 'users'
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, unique=True, nullable=False, index=True)
     spreadsheet_id = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
-    def __repr__(self):
-        return f"<User(user_id={self.user_id}, spreadsheet_id={self.spreadsheet_id})>"
+
+
+class ChannelMapping(Base):
+    """Maps a Telegram channel to a user (channel_id -> user_id)."""
+    __tablename__ = 'channel_mappings'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    channel_id = Column(BigInteger, unique=True, nullable=False, index=True)
+    user_id = Column(BigInteger, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class ChannelMessageMapping(Base):
+    """Maps channel post to cloned DM message (for edit sync)."""
+    __tablename__ = 'channel_message_mappings'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    channel_id = Column(BigInteger, nullable=False)
+    post_id = Column(BigInteger, nullable=False)
+    cloned_id = Column(BigInteger, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 # Database setup
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./ayda_think.db")
@@ -51,6 +69,61 @@ def get_user_spreadsheet(user_id: int) -> Optional[str]:
         return user.spreadsheet_id if user else None
     finally:
         session.close()
+
+def get_channel_user(channel_id: int) -> Optional[int]:
+    """Get user_id mapped to a channel."""
+    session = SessionLocal()
+    try:
+        mapping = session.query(ChannelMapping).filter(
+            ChannelMapping.channel_id == channel_id
+        ).first()
+        return mapping.user_id if mapping else None
+    finally:
+        session.close()
+
+
+def save_channel_mapping(channel_id: int, user_id: int) -> None:
+    """Save or update channel -> user mapping."""
+    session = SessionLocal()
+    try:
+        mapping = session.query(ChannelMapping).filter(
+            ChannelMapping.channel_id == channel_id
+        ).first()
+        if mapping:
+            mapping.user_id = user_id
+        else:
+            mapping = ChannelMapping(channel_id=channel_id, user_id=user_id)
+            session.add(mapping)
+        session.commit()
+    finally:
+        session.close()
+
+
+def get_cloned_message_id(channel_id: int, post_id: int) -> Optional[int]:
+    """Get cloned DM message_id for a channel post."""
+    session = SessionLocal()
+    try:
+        mapping = session.query(ChannelMessageMapping).filter(
+            ChannelMessageMapping.channel_id == channel_id,
+            ChannelMessageMapping.post_id == post_id
+        ).first()
+        return mapping.cloned_id if mapping else None
+    finally:
+        session.close()
+
+
+def save_message_mapping(channel_id: int, post_id: int, cloned_id: int) -> None:
+    """Save channel post -> cloned DM message mapping."""
+    session = SessionLocal()
+    try:
+        mapping = ChannelMessageMapping(
+            channel_id=channel_id, post_id=post_id, cloned_id=cloned_id
+        )
+        session.add(mapping)
+        session.commit()
+    finally:
+        session.close()
+
 
 def save_user(user_id: int, spreadsheet_id: str) -> None:
     """

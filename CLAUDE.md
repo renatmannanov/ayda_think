@@ -21,7 +21,7 @@ Telegram-бот для сохранения заметок в Google Sheets (mul
 | Pydantic models | `schemas.py` |
 | Runtime data (JSON) | `data/` |
 | Documentation | `docs/` |
-| Tasks | `task_tracker/` |
+| Tasks | `docs/task_tracker/` |
 
 ## Tech Stack
 
@@ -108,7 +108,7 @@ ayda_think/
 │
 ├── storage/
 │   ├── base.py              # Abstract interface
-│   ├── db.py                # SQLite/PostgreSQL (User model)
+│   ├── db.py                # SQLite/PostgreSQL (User, ChannelMapping, ChannelMessageMapping)
 │   └── google_sheets.py     # Google Sheets read/write
 │
 ├── webapp/
@@ -120,12 +120,13 @@ ayda_think/
 │   ├── gestures.js          # Touch/swipe controls
 │   └── styles.css           # Mobile-first CSS
 │
-├── data/                    # Runtime JSON (gitignored)
-│   ├── channel_map.json     # channel_id → user_id
-│   └── channel_messages.json # channel post → DM clone mapping
+├── data/                    # Runtime data (gitignored, NOT used for persistent state)
+│   └── (legacy JSON files removed — mappings now in DB)
 │
-├── docs/                    # Documentation (gitignored)
-└── task_tracker/            # Tasks (gitignored)
+└── docs/                    # Documentation (gitignored)
+    ├── ai_settings/         # AI context, specs
+    ├── task_tracker/        # Tasks (to_do/, done/)
+    └── claudes_to_choose/   # CLAUDE.md examples from other projects
 ```
 
 ## Google Sheets Schema (11 columns)
@@ -177,17 +178,18 @@ except Exception as e:
     await msg.answer(f"Error: {e}")
 ```
 
-### Data files path — use os.path.join
+### Persistent state — always use DB, never JSON files
 ```python
-# Channel map and message map are in data/
-CHANNEL_MAP_FILE = os.path.join('data', 'channel_map.json')
+# Channel mappings are in PostgreSQL, NOT in JSON files.
+# JSON files in data/ are ephemeral and get lost on redeploy.
+from storage.db import save_channel_mapping, get_channel_user
 ```
 
 ## Навигация по docs/
 
 - `docs/` — читать свободно
-- `task_tracker/to_do/` — текущие задачи, читать свободно
-- `task_tracker/done/` — НЕ читать без запроса (экономия контекста)
+- `docs/task_tracker/to_do/` — текущие задачи, читать свободно
+- `docs/task_tracker/done/` — НЕ читать без запроса (экономия контекста)
 
 ## Выполнение планов
 
@@ -201,3 +203,4 @@ CHANNEL_MAP_FILE = os.path.join('data', 'channel_map.json')
 - [ ] Зарегистрирован handler в `main.py`
 - [ ] Вызывается оттуда, где нужно
 - [ ] Есть путь от user action до этого кода
+- [ ] CLAUDE.md обновлён (Quick Reference, Project Structure, API Endpoints)
