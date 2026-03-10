@@ -430,3 +430,144 @@ def get_fragments_by_ids(fragment_ids: list[int]) -> list[dict]:
         return [{'id': r.id, 'text': r.text} for r in results]
     finally:
         session.close()
+
+
+# ---------------------------------------------------------------------------
+# Cluster CRUD
+# ---------------------------------------------------------------------------
+
+def get_all_embedded_fragments() -> list[dict]:
+    """All fragments with embeddings (excluding duplicates).
+    Returns [{id, embedding, tags, text, created_at}, ...].
+    """
+    if not _pgvector_available():
+        logging.warning("get_all_embedded_fragments called but pgvector is not available")
+        return []
+
+    session = SessionLocal()
+    try:
+        results = (
+            session.query(
+                Fragment.id,
+                Fragment.embedding,
+                Fragment.tags,
+                Fragment.text,
+                Fragment.created_at,
+            )
+            .filter(Fragment.embedding.isnot(None))
+            .filter(Fragment.is_duplicate.isnot(True))
+            .all()
+        )
+        return [
+            {
+                'id': r.id,
+                'embedding': list(r.embedding),
+                'tags': r.tags or [],
+                'text': r.text,
+                'created_at': r.created_at,
+            }
+            for r in results
+        ]
+    finally:
+        session.close()
+
+
+def get_latest_cluster_version() -> int | None:
+    """Max version from clusters table. None if no clusters exist."""
+    session = SessionLocal()
+    try:
+        result = session.query(func.max(Cluster.version)).scalar()
+        return result
+    finally:
+        session.close()
+
+
+def save_cluster_results(version: int, clusters_data: list[dict]) -> None:
+    """Save clustering results in a single transaction.
+    clusters_data: [{label, size, preview, fragment_ids}, ...]
+    """
+    session = SessionLocal()
+    try:
+        for cd in clusters_data:
+            cluster = Cluster(
+                version=version,
+                label=cd['label'],
+                size=cd['size'],
+                preview=cd['preview'],
+            )
+            session.add(cluster)
+            session.flush()  # get cluster.id
+
+            for fid in cd['fragment_ids']:
+                fc = FragmentCluster(
+                    fragment_id=fid,
+                    cluster_id=cluster.id,
+                    version=version,
+                )
+                session.add(fc)
+
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+
+def get_clusters_by_version(version: int) -> list[dict]:
+    """Clusters for a given version, sorted by size DESC."""
+    session = SessionLocal()
+    try:
+        results = (
+            session.query(Cluster)
+            .filter(Cluster.version == version)
+            .order_by(Cluster.size.desc())
+            .all()
+        )
+        return [
+            {
+                'id': r.id,
+                'label': r.label,
+                'size': r.size,
+                'preview': r.preview,
+                'created_at': r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in results
+        ]
+    finally:
+        session.close()
+
+
+def get_cluster_fragments(cluster_id: int, limit: int = 10, offset: int = 0) -> list[dict]:
+    """Fragments of a specific cluster, sorted by created_at.
+    Supports pagination via limit/offset.
+    """
+    session = SessionLocal()
+    try:
+        results = (
+            session.query(
+                Fragment.id,
+                Fragment.external_id,
+                Fragment.text,
+                Fragment.tags,
+                Fragment.created_at,
+            )
+            .join(FragmentCluster, FragmentCluster.fragment_id == Fragment.id)
+            .filter(FragmentCluster.cluster_id == cluster_id)
+            .order_by(Fragment.created_at)
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
+        return [
+            {
+                'id': r.id,
+                'external_id': r.external_id,
+                'text': r.text,
+                'tags': r.tags or [],
+                'created_at': r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in results
+        ]
+    finally:
+        session.close()
