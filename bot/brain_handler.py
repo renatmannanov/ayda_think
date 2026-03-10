@@ -24,10 +24,25 @@ _STOP_WORDS = frozenset(
 )
 
 
+def _stem_keyword(word: str) -> list[str]:
+    """Generate ILIKE patterns: full word + trimmed stem for Cyrillic words.
+    'Айкой' → ['Айкой', 'Айко', 'Айк']
+    'business' → ['business']
+    """
+    patterns = [word]
+    # For Cyrillic words >= 5 chars, add stems by trimming 1-2 chars
+    if len(word) >= 5 and any('\u0400' <= c <= '\u04ff' for c in word):
+        patterns.append(word[:-1])
+        patterns.append(word[:-2])
+    elif len(word) >= 4 and any('\u0400' <= c <= '\u04ff' for c in word):
+        patterns.append(word[:-1])
+    return patterns
+
+
 def _parse_search_query(query: str) -> tuple[str, list[str], list[str]]:
     """Parse search query into (clean_query, tags, keywords).
     - tags: words starting with # (kept as-is for ARRAY overlap)
-    - keywords: non-stop words >= 3 chars (for ILIKE)
+    - keywords: non-stop words >= 3 chars, with stemmed variants (for ILIKE)
     - clean_query: original query (for embedding)
     """
     tags = []
@@ -36,7 +51,7 @@ def _parse_search_query(query: str) -> tuple[str, list[str], list[str]]:
         if word.startswith('#'):
             tags.append(word.lower())
         elif len(word) >= 3 and word.lower() not in _STOP_WORDS:
-            keywords.append(word)
+            keywords.extend(_stem_keyword(word))
     return query, tags, keywords
 
 
