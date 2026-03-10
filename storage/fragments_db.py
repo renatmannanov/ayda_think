@@ -5,7 +5,7 @@ Uses pgvector for embedding storage and similarity search when available.
 
 from sqlalchemy import (
     Column, Integer, String, Text, Boolean, DateTime, ForeignKey,
-    UniqueConstraint, func
+    UniqueConstraint, func, or_, cast
 )
 from sqlalchemy.dialects.postgresql import JSONB, ARRAY
 from datetime import datetime
@@ -210,6 +210,119 @@ def search_by_embedding(embedding: list[float], limit: int = 10) -> list[dict]:
         ]
     finally:
         session.close()
+
+
+def search_by_keywords(
+    tags: list[str] | None = None,
+    keywords: list[str] | None = None,
+    limit: int = 20,
+) -> list[dict]:
+    """
+    Find fragments matching tags (ARRAY overlap) and/or keywords (ILIKE on text).
+    Returns same dict shape as search_by_embedding but without distance.
+    """
+    if not tags and not keywords:
+        return []
+
+    session = SessionLocal()
+    try:
+        query = session.query(
+            Fragment.id,
+            Fragment.external_id,
+            Fragment.text,
+            Fragment.source,
+            Fragment.tags,
+            Fragment.created_at,
+            Fragment.content_type,
+        ).filter(Fragment.is_duplicate.isnot(True))
+
+        conditions = []
+        if tags:
+            conditions.append(Fragment.tags.overlap(tags))
+        if keywords:
+            conditions.extend(
+                Fragment.text.ilike(f'%{kw}%') for kw in keywords
+            )
+        query = query.filter(or_(*conditions))
+        query = query.order_by(Fragment.created_at.desc()).limit(limit)
+
+        results = query.all()
+        return [
+            {
+                'id': r.id,
+                'external_id': r.external_id,
+                'text': r.text,
+                'source': r.source,
+                'tags': r.tags,
+                'created_at': r.created_at.isoformat(),
+                'content_type': r.content_type,
+                'distance': None,
+            }
+            for r in results
+        ]
+    finally:
+        session.close()
+
+
+def search_hybrid(
+    embedding: list[float],
+    tags: list[str] | None = None,
+    keywords: list[str] | None = None,
+    limit: int = 10,
+) -> list[dict]:
+    """
+    Hybrid search: semantic + keyword/tag matching.
+    Runs both searches, merges by id, re-ranks with combined scoring.
+    """
+    semantic_results = search_by_embedding(embedding, limit=limit * 2)
+    keyword_results = search_by_keywords(tags, keywords, limit=limit * 2)
+
+    # Build lookup: id -> result dict
+    merged = {}
+    for r in semantic_results:
+        merged[r['id']] = {**r, '_semantic': True, '_keyword': False}
+    for r in keyword_results:
+        if r['id'] in merged:
+            merged[r['id']]['_keyword'] = True
+        else:
+            merged[r['id']] = {**r, '_semantic': False, '_keyword': True}
+
+    # Determine which keyword results matched by tag vs text
+    tag_ids = set()
+    keyword_ids = set()
+    if keyword_results:
+        kw_result_ids = {r['id'] for r in keyword_results}
+        if tags:
+            # Check which matched by tag
+            for r in keyword_results:
+                if r['tags'] and any(t in r['tags'] for t in tags):
+                    tag_ids.add(r['id'])
+        if keywords:
+            keyword_ids = kw_result_ids  # all keyword results potentially match text
+
+    # Score and rank
+    scored = []
+    for fid, r in merged.items():
+        if r['_semantic'] and r['distance'] is not None:
+            semantic_score = 1.0 - r['distance']
+        else:
+            semantic_score = 0.0
+
+        keyword_bonus = 0.0
+        has_tag = fid in tag_ids
+        has_kw = fid in keyword_ids
+        if has_tag and has_kw:
+            keyword_bonus = 0.5
+        elif has_tag or has_kw:
+            keyword_bonus = 0.3
+
+        final_score = semantic_score * 0.6 + keyword_bonus
+        r['distance'] = round(1.0 - final_score, 4)
+        scored.append((final_score, r))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+
+    return [r for _, r in scored[:limit]]
 
 
 def get_unembedded_fragments(limit: int = 100) -> list[dict]:

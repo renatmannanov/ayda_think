@@ -10,11 +10,34 @@ from telegram.ext import ContextTypes
 
 from services.transcription_service import get_openai_client
 from services.normalizer_service import normalize_all
-from storage.fragments_db import search_by_embedding, get_fragments_count
+from storage.fragments_db import search_by_embedding, search_hybrid, get_fragments_count
 
 logger = logging.getLogger(__name__)
 
 ADMIN_USER_ID = int(os.getenv("ADMIN_USER_ID", "0"))
+
+
+_STOP_WORDS = frozenset(
+    'с в на по для что как это или все мне мой где при так его ее них '
+    'был быть есть нет без они она они мы вы уже еще бы же ли не но да '
+    'от до из за об под над'.split()
+)
+
+
+def _parse_search_query(query: str) -> tuple[str, list[str], list[str]]:
+    """Parse search query into (clean_query, tags, keywords).
+    - tags: words starting with # (kept as-is for ARRAY overlap)
+    - keywords: non-stop words >= 3 chars (for ILIKE)
+    - clean_query: original query (for embedding)
+    """
+    tags = []
+    keywords = []
+    for word in query.split():
+        if word.startswith('#'):
+            tags.append(word.lower())
+        elif len(word) >= 3 and word.lower() not in _STOP_WORDS:
+            keywords.append(word)
+    return query, tags, keywords
 
 
 def _make_telegram_link(external_id: str | None) -> str | None:
@@ -58,15 +81,29 @@ async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         query_embedding = response.data[0].embedding
 
-        # Search
-        results = search_by_embedding(query_embedding, limit=limit)
+        # Parse query for hybrid search
+        _, search_tags, search_keywords = _parse_search_query(query)
+
+        # Use hybrid search if tags/keywords detected, else pure semantic
+        if search_tags or search_keywords:
+            results = search_hybrid(query_embedding, tags=search_tags, keywords=search_keywords, limit=limit)
+        else:
+            results = search_by_embedding(query_embedding, limit=limit)
 
         if not results:
             await message.reply_text(f"🔍 По запросу \"{query}\" ничего не найдено.")
             return
 
         # Format response
-        lines = [f"🔍 Поиск: \"{query}\"\n"]
+        header = f"🔍 Поиск: \"{query}\""
+        if search_tags or search_keywords:
+            parts = []
+            if search_tags:
+                parts.append(f"теги: {' '.join(search_tags)}")
+            if search_keywords:
+                parts.append(f"слова: {', '.join(search_keywords)}")
+            header += f"\n🏷 {' | '.join(parts)}"
+        lines = [header + "\n"]
         for i, r in enumerate(results, 1):
             date = r['created_at'][:10]
             text_preview = r['text'][:120].replace('\n', ' ')
