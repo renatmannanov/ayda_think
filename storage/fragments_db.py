@@ -1,18 +1,24 @@
 """
 Fragment storage: SQLAlchemy models + CRUD for the fragments/clusters/fragment_clusters tables.
-Uses pgvector for embedding storage and similarity search.
+Uses pgvector for embedding storage and similarity search when available.
 """
 
 from sqlalchemy import (
     Column, Integer, String, Text, Boolean, DateTime, ForeignKey,
-    UniqueConstraint, Index, func
+    UniqueConstraint, func
 )
 from sqlalchemy.dialects.postgresql import JSONB, ARRAY
-from pgvector.sqlalchemy import Vector
 from datetime import datetime
 from typing import Optional
+import logging
 
-from storage.db import Base, SessionLocal
+from storage.db import Base, SessionLocal, pgvector_available
+
+# ---------------------------------------------------------------------------
+# Conditional pgvector import
+# ---------------------------------------------------------------------------
+if pgvector_available:
+    from pgvector.sqlalchemy import Vector
 
 # ---------------------------------------------------------------------------
 # Models
@@ -25,7 +31,6 @@ class Fragment(Base):
     external_id = Column(String(255), unique=True, nullable=True)
     source = Column(String(50), nullable=False)          # telegram, instagram, linkedin, browser
     text = Column(Text, nullable=False)
-    embedding = Column(Vector(1536), nullable=True)      # OpenAI text-embedding-3-small
     tags = Column(ARRAY(Text), default=[])
     created_at = Column(DateTime, nullable=False)
     indexed_at = Column(DateTime, default=datetime.utcnow)
@@ -34,6 +39,11 @@ class Fragment(Base):
     language = Column(String(5), nullable=True)           # ru / en / mixed
     is_duplicate = Column(Boolean, default=False)
     is_outdated = Column(Boolean, default=False)
+
+
+# Add embedding column only if pgvector is available
+if pgvector_available:
+    Fragment.embedding = Column(Vector(1536), nullable=True)
 
 
 class Cluster(Base):
@@ -149,8 +159,12 @@ def get_fragments_count() -> int:
 def search_by_embedding(embedding: list[float], limit: int = 10) -> list[dict]:
     """
     Find closest fragments by cosine distance.
-    Requires embedding to be set on fragments.
+    Requires pgvector to be available and embeddings to be set.
     """
+    if not pgvector_available:
+        logging.warning("search_by_embedding called but pgvector is not available")
+        return []
+
     session = SessionLocal()
     try:
         results = (

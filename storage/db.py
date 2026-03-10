@@ -50,25 +50,34 @@ if DATABASE_URL.startswith("postgres://"):
 engine = create_engine(DATABASE_URL, echo=False)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+# Flag: is pgvector available on this PostgreSQL instance?
+pgvector_available = False
+
+
 def init_db():
-    """Initialize database tables, including pgvector extension."""
-    # Enable pgvector extension (PostgreSQL only, skipped for SQLite)
+    """Initialize database tables. Enables pgvector if available."""
+    global pgvector_available
+
+    # Try to enable pgvector extension (PostgreSQL only)
     if not DATABASE_URL.startswith("sqlite"):
         try:
             with engine.connect() as conn:
                 conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
                 conn.commit()
+            pgvector_available = True
             logging.info("pgvector extension enabled")
         except Exception as e:
-            logging.warning(f"Could not enable pgvector extension: {e}")
+            pgvector_available = False
+            logging.warning(f"pgvector not available, embedding features disabled: {e}")
 
     # Import fragment models so they are registered with Base.metadata
+    # Must happen AFTER pgvector_available is set
     import storage.fragments_db  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
 
-    # Create HNSW index for embeddings (PostgreSQL only)
-    if not DATABASE_URL.startswith("sqlite"):
+    # Create HNSW index for embeddings (only if pgvector is available)
+    if pgvector_available:
         try:
             with engine.connect() as conn:
                 conn.execute(text(
