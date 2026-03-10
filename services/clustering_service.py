@@ -69,7 +69,7 @@ def run_clustering(eps: float = 0.35, min_samples: int = 3) -> dict:
         preview = _make_preview(cluster_fragments)
 
         clusters_data.append({
-            'label': label,
+            'label': int(label),
             'size': len(fragment_ids),
             'preview': preview,
             'fragment_ids': fragment_ids,
