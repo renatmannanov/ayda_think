@@ -8,9 +8,12 @@ import os
 from telegram import Update
 from telegram.ext import ContextTypes
 
+from sqlalchemy import text as sa_text
+
 from services.transcription_service import get_openai_client
 from services.normalizer_service import normalize_all
-from storage.fragments_db import search_by_embedding, get_fragments_count
+from storage.fragments_db import search_by_embedding, get_fragments_count, Fragment, _pgvector_available
+from storage.db import SessionLocal, engine
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +80,39 @@ async def normalize_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     status_msg = await message.reply_text("⏳ Запускаю нормализацию...")
 
     try:
+        # Diagnostic: check mapper, raw SQL, ORM
+        import storage.db as _db
+        mapper_cols = [c.key for c in Fragment.__table__.columns]
+        has_emb_attr = hasattr(Fragment, 'embedding')
+        has_emb_col = 'embedding' in mapper_cols
+        pgv = _pgvector_available()
+        pgv_db = _db.pgvector_available
+
+        with engine.connect() as conn:
+            raw_total = conn.execute(sa_text("SELECT count(*) FROM fragments")).scalar()
+            raw_null_emb = conn.execute(sa_text(
+                "SELECT count(*) FROM fragments WHERE embedding IS NULL"
+            )).scalar()
+
+        session = SessionLocal()
+        try:
+            orm_null = session.query(Fragment).filter(
+                Fragment.embedding.is_(None)
+            ).count() if has_emb_attr else -1
+        except Exception as ex:
+            orm_null = f"ERROR: {ex}"
+        finally:
+            session.close()
+
+        diag = (
+            f"DIAG: pgv_import={True}, pgv_db={pgv_db}, pgv_avail={pgv}\n"
+            f"  has_emb_attr={has_emb_attr}, has_emb_col={has_emb_col}\n"
+            f"  mapper_cols={mapper_cols}\n"
+            f"  raw_total={raw_total}, raw_null_emb={raw_null_emb}\n"
+            f"  orm_null_emb={orm_null}"
+        )
+        logger.info(diag)
+
         result = normalize_all()
         total = get_fragments_count()
         await status_msg.edit_text(
@@ -84,8 +120,9 @@ async def normalize_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"  Эмбеддинги: {result['embedded']}\n"
             f"  Дубликаты: {result['duplicates']}\n"
             f"  Ошибки: {result['errors']}\n"
-            f"  Всего в БД: {total}"
+            f"  Всего в БД: {total}\n\n"
+            f"DEBUG:\n{diag}"
         )
     except Exception as e:
-        logger.error(f"Normalize error: {e}")
+        logger.error(f"Normalize error: {e}", exc_info=True)
         await status_msg.edit_text(f"❌ Ошибка нормализации: {e}")
