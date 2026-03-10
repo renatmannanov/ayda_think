@@ -268,11 +268,16 @@ def search_hybrid(
     embedding: list[float],
     tags: list[str] | None = None,
     keywords: list[str] | None = None,
+    keyword_groups: list[list[str]] | None = None,
     limit: int = 10,
 ) -> list[dict]:
     """
     Hybrid search: semantic + keyword/tag matching.
     Runs both searches, merges by id, re-ranks with combined scoring.
+
+    keyword_groups: list of stem groups per original word, e.g.
+      [['Айкой','Айко','Айк'], ['отношения','отношени','отношен']]
+    Used to calculate what fraction of original words matched each fragment.
     """
     semantic_results = search_by_embedding(embedding, limit=limit * 2)
     keyword_results = search_by_keywords(tags, keywords, limit=limit * 2)
@@ -287,18 +292,9 @@ def search_hybrid(
         else:
             merged[r['id']] = {**r, '_semantic': False, '_keyword': True}
 
-    # Determine which keyword results matched by tag vs text
-    tag_ids = set()
-    keyword_ids = set()
-    if keyword_results:
-        kw_result_ids = {r['id'] for r in keyword_results}
-        if tags:
-            # Check which matched by tag
-            for r in keyword_results:
-                if r['tags'] and any(t in r['tags'] for t in tags):
-                    tag_ids.add(r['id'])
-        if keywords:
-            keyword_ids = kw_result_ids  # all keyword results potentially match text
+    # Count how many original words each fragment matches
+    groups = keyword_groups or []
+    total_words = len(groups) + (len(tags) if tags else 0)
 
     # Score and rank
     scored = []
@@ -308,13 +304,22 @@ def search_hybrid(
         else:
             semantic_score = 0.0
 
-        keyword_bonus = 0.0
-        has_tag = fid in tag_ids
-        has_kw = fid in keyword_ids
-        if has_tag and has_kw:
-            keyword_bonus = 0.5
-        elif has_tag or has_kw:
-            keyword_bonus = 0.3
+        # Count matched word groups
+        matched = 0
+        if tags and r['tags']:
+            for t in tags:
+                if t in r['tags']:
+                    matched += 1
+        text_lower = r['text'].lower() if r['_keyword'] else ''
+        for group in groups:
+            if any(stem.lower() in text_lower for stem in group):
+                matched += 1
+
+        # Bonus proportional to fraction of words matched
+        if total_words > 0 and matched > 0:
+            keyword_bonus = 0.5 * (matched / total_words)
+        else:
+            keyword_bonus = 0.0
 
         final_score = semantic_score * 0.6 + keyword_bonus
         r['distance'] = round(1.0 - final_score, 4)

@@ -39,20 +39,21 @@ def _stem_keyword(word: str) -> list[str]:
     return patterns
 
 
-def _parse_search_query(query: str) -> tuple[str, list[str], list[str]]:
-    """Parse search query into (clean_query, tags, keywords).
+def _parse_search_query(query: str) -> tuple[str, list[str], list[list[str]]]:
+    """Parse search query into (clean_query, tags, keyword_groups).
     - tags: words starting with # (kept as-is for ARRAY overlap)
-    - keywords: non-stop words >= 3 chars, with stemmed variants (for ILIKE)
+    - keyword_groups: list of stem groups per original word.
+      E.g., ['Айкой', 'отношения'] → [['Айкой','Айко','Айк'], ['отношения','отношени','отношен']]
     - clean_query: original query (for embedding)
     """
     tags = []
-    keywords = []
+    keyword_groups = []
     for word in query.split():
         if word.startswith('#'):
             tags.append(word.lower())
         elif len(word) >= 3 and word.lower() not in _STOP_WORDS:
-            keywords.extend(_stem_keyword(word))
-    return query, tags, keywords
+            keyword_groups.append(_stem_keyword(word))
+    return query, tags, keyword_groups
 
 
 def _make_telegram_link(external_id: str | None) -> str | None:
@@ -97,11 +98,17 @@ async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         query_embedding = response.data[0].embedding
 
         # Parse query for hybrid search
-        _, search_tags, search_keywords = _parse_search_query(query)
+        _, search_tags, keyword_groups = _parse_search_query(query)
+        # Flatten for ILIKE and display
+        all_keywords = [kw for group in keyword_groups for kw in group]
 
         # Use hybrid search if tags/keywords detected, else pure semantic
-        if search_tags or search_keywords:
-            results = search_hybrid(query_embedding, tags=search_tags, keywords=search_keywords, limit=limit)
+        if search_tags or keyword_groups:
+            results = search_hybrid(
+                query_embedding, tags=search_tags,
+                keywords=all_keywords, keyword_groups=keyword_groups,
+                limit=limit,
+            )
         else:
             results = search_by_embedding(query_embedding, limit=limit)
 
@@ -111,12 +118,13 @@ async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Format response
         header = f"🔍 Поиск: \"{query}\""
-        if search_tags or search_keywords:
+        if search_tags or keyword_groups:
             parts = []
             if search_tags:
                 parts.append(f"теги: {' '.join(search_tags)}")
-            if search_keywords:
-                parts.append(f"слова: {', '.join(search_keywords)}")
+            if keyword_groups:
+                originals = [g[0] for g in keyword_groups]
+                parts.append(f"слова: {', '.join(originals)}")
             header += f"\n🏷 {' | '.join(parts)}"
         lines = [header + "\n"]
         for i, r in enumerate(results, 1):
