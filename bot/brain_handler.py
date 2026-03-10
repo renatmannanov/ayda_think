@@ -10,8 +10,7 @@ from telegram.ext import ContextTypes
 
 from services.transcription_service import get_openai_client
 from services.normalizer_service import normalize_all
-from storage.fragments_db import search_by_embedding, get_fragments_count, _pgvector_available
-import storage.db as _db
+from storage.fragments_db import search_by_embedding, get_fragments_count
 
 logger = logging.getLogger(__name__)
 
@@ -75,20 +74,11 @@ async def normalize_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await message.reply_text("⛔ Нет доступа.")
         return
 
-    # Diagnostic info
-    total = get_fragments_count()
-    pgv = _pgvector_available()
-    pgv_db = _db.pgvector_available
-
-    status_msg = await message.reply_text(
-        f"⏳ Запускаю нормализацию...\n"
-        f"  Фрагментов в БД: {total}\n"
-        f"  pgvector (db): {pgv_db}\n"
-        f"  pgvector (available): {pgv}"
-    )
+    status_msg = await message.reply_text("⏳ Запускаю нормализацию...")
 
     try:
         result = normalize_all()
+        total = get_fragments_count()
         await status_msg.edit_text(
             f"✅ Нормализация завершена:\n"
             f"  Эмбеддинги: {result['embedded']}\n"
