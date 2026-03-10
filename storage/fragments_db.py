@@ -215,12 +215,23 @@ def search_by_embedding(embedding: list[float], limit: int = 10) -> list[dict]:
 
 def get_unembedded_fragments(limit: int = 100) -> list[dict]:
     """Get fragments without embeddings (embedding IS NULL, is_duplicate=False)."""
+    logging.info(f"get_unembedded_fragments: _pgvector_import_ok={_pgvector_import_ok}, "
+                 f"_db.pgvector_available={_db.pgvector_available}, "
+                 f"_pgvector_available()={_pgvector_available()}, "
+                 f"has_embedding={hasattr(Fragment, 'embedding')}")
     if not _pgvector_available():
-        logging.warning("get_unembedded_fragments called but pgvector is not available")
+        logging.warning("get_unembedded_fragments: pgvector not available, returning []")
         return []
 
     session = SessionLocal()
     try:
+        # Also try raw SQL for comparison
+        from sqlalchemy import text
+        raw_count = session.execute(
+            text("SELECT count(*) FROM fragments WHERE embedding IS NULL")
+        ).scalar()
+        logging.info(f"get_unembedded_fragments: raw SQL count={raw_count}")
+
         results = (
             session.query(Fragment.id, Fragment.text)
             .filter(Fragment.embedding.is_(None))
@@ -228,6 +239,7 @@ def get_unembedded_fragments(limit: int = 100) -> list[dict]:
             .limit(limit)
             .all()
         )
+        logging.info(f"get_unembedded_fragments: ORM returned {len(results)} results")
         return [{'id': r.id, 'text': r.text} for r in results]
     finally:
         session.close()
