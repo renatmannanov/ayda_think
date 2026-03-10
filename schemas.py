@@ -73,3 +73,23 @@ class ReplyChainResponse(BaseModel):
     stats: ReplyChainStats
     branches: List[ReplyChainNote]  # Siblings for branch navigation
     note_id: str  # ID of the note this chain is built for
+
+
+# Fragment schemas (for POST /api/fragments)
+
+class FragmentInput(BaseModel):
+    external_id: Optional[str] = None
+    text: str
+    created_at: str
+    tags: List[str] = []
+    content_type: str = 'note'
+    metadata: dict = {}
+
+class FragmentsRequest(BaseModel):
+    source: str
+    fragments: List[FragmentInput]
+
+class FragmentsResponse(BaseModel):
+    indexed: int
+    duplicates_skipped: int
+    total: int

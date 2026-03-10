@@ -1,8 +1,9 @@
-from sqlalchemy import create_engine, Column, Integer, BigInteger, String, DateTime
+from sqlalchemy import create_engine, Column, Integer, BigInteger, String, DateTime, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
 from typing import Optional
+import logging
 import os
 
 # Base class for models
@@ -50,8 +51,34 @@ engine = create_engine(DATABASE_URL, echo=False)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def init_db():
-    """Initialize database tables."""
+    """Initialize database tables, including pgvector extension."""
+    # Enable pgvector extension (PostgreSQL only, skipped for SQLite)
+    if not DATABASE_URL.startswith("sqlite"):
+        try:
+            with engine.connect() as conn:
+                conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+                conn.commit()
+            logging.info("pgvector extension enabled")
+        except Exception as e:
+            logging.warning(f"Could not enable pgvector extension: {e}")
+
+    # Import fragment models so they are registered with Base.metadata
+    import storage.fragments_db  # noqa: F401
+
     Base.metadata.create_all(bind=engine)
+
+    # Create HNSW index for embeddings (PostgreSQL only)
+    if not DATABASE_URL.startswith("sqlite"):
+        try:
+            with engine.connect() as conn:
+                conn.execute(text(
+                    "CREATE INDEX IF NOT EXISTS idx_fragments_embedding "
+                    "ON fragments USING hnsw (embedding vector_cosine_ops)"
+                ))
+                conn.commit()
+            logging.info("HNSW index created for fragments.embedding")
+        except Exception as e:
+            logging.warning(f"Could not create HNSW index: {e}")
 
 def get_user_spreadsheet(user_id: int) -> Optional[str]:
     """

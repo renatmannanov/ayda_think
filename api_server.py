@@ -1,11 +1,18 @@
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Header
 from fastapi.responses import FileResponse
 from config import config
 from storage.google_sheets import GoogleSheetsStorage
 from services import NoteService
 from services.relation_service import RelationService
-from schemas import StatusUpdate, NotesResponse, RelatedNotesResponse, ReplyChainResponse
+from schemas import (
+    StatusUpdate, NotesResponse, RelatedNotesResponse, ReplyChainResponse,
+    FragmentsRequest, FragmentsResponse
+)
+from storage.fragments_db import insert_fragments_batch, get_fragments_count
 from bot.utils import get_user_spreadsheet
+from datetime import datetime
+import os
+import logging
 
 app = FastAPI()
 
@@ -181,8 +188,50 @@ async def get_reply_chain(note_id: str, user_id: int = Query(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+FRAGMENTS_API_KEY = os.getenv("FRAGMENTS_API_KEY")
+
+
+@app.post("/api/fragments", response_model=FragmentsResponse)
+async def ingest_fragments(
+    request: FragmentsRequest,
+    x_api_key: str = Header(..., alias="X-API-Key"),
+):
+    """
+    Ingest fragments from external sources (tg_gather, import scripts, etc.).
+    Requires X-API-Key header.
+    """
+    if not FRAGMENTS_API_KEY or x_api_key != FRAGMENTS_API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid API key")
+
+    try:
+        batch = []
+        for f in request.fragments:
+            batch.append({
+                'external_id': f.external_id,
+                'source': request.source,
+                'text': f.text,
+                'created_at': datetime.fromisoformat(f.created_at),
+                'tags': f.tags,
+                'content_type': f.content_type,
+                'metadata': f.metadata,
+            })
+
+        result = insert_fragments_batch(batch)
+        total = get_fragments_count()
+
+        logging.info(f"Fragments ingested: {result['indexed']} new, {result['duplicates_skipped']} skipped")
+
+        return FragmentsResponse(
+            indexed=result['indexed'],
+            duplicates_skipped=result['duplicates_skipped'],
+            total=total,
+        )
+    except Exception as e:
+        logging.error(f"Error ingesting fragments: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 if __name__ == "__main__":
     import uvicorn
-    import os
     port = int(os.getenv("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port)

@@ -31,6 +31,8 @@ Telegram-бот для сохранения заметок в Google Sheets (mul
 | API | FastAPI + uvicorn |
 | Google Sheets | gspread + google-auth |
 | Database | SQLite (local) / PostgreSQL (Railway) via SQLAlchemy |
+| Vector search | pgvector + OpenAI text-embedding-3-small |
+| Clustering | scikit-learn (DBSCAN) |
 | Voice | OpenAI Whisper + GPT-4o-mini |
 | Frontend | Vanilla JS (ES6 modules) |
 | Config | python-dotenv |
@@ -109,6 +111,7 @@ ayda_think/
 ├── storage/
 │   ├── base.py              # Abstract interface
 │   ├── db.py                # SQLite/PostgreSQL (User, ChannelMapping, ChannelMessageMapping)
+│   ├── fragments_db.py      # Fragment/Cluster/FragmentCluster models + CRUD (pgvector)
 │   └── google_sheets.py     # Google Sheets read/write
 │
 ├── webapp/
@@ -154,6 +157,7 @@ ayda_think/
 | POST | `/api/notes/{id}/status` | Update note status |
 | GET | `/api/notes/{id}/related?user_id=X` | Related notes by tags |
 | GET | `/api/notes/{id}/replies?user_id=X` | Reply chain tree |
+| POST | `/api/fragments` | Ingest fragments (requires X-API-Key) |
 
 ## Critical Rules
 

@@ -1,6 +1,7 @@
 from telegram import Update, ReactionTypeEmoji
 from telegram.ext import ContextTypes
 from storage.google_sheets import GoogleSheetsStorage
+from storage.fragments_db import insert_fragment
 from .utils import get_user_spreadsheet, extract_spreadsheet_id
 from .forward_utils import (
     extract_forward_content,
@@ -10,7 +11,33 @@ from .forward_utils import (
 )
 from .registration_handler import register_sheet
 from .voice_handler import process_voice_message, has_voice_or_audio
+from datetime import datetime, timezone
 import logging
+
+def _save_to_fragments(note: dict, user_id: int):
+    """Duplicate a saved note into the fragments table. Best-effort, never raises."""
+    content = note.get('content', '')
+    if not content or content == '[Media]':
+        return
+    try:
+        msg_type = note.get('message_type', 'general')
+        content_type = 'repost' if msg_type == 'forwarded' else 'note'
+        insert_fragment(
+            source='telegram',
+            text=content,
+            created_at=datetime.now(timezone.utc),
+            tags=note.get('tags', []),
+            content_type=content_type,
+            external_id=f"bot_{user_id}_{note.get('message_id', '')}",
+            metadata={
+                'telegram_msg_id': note.get('message_id'),
+                'user_id': user_id,
+                'message_type': msg_type,
+            },
+        )
+    except Exception as e:
+        logging.warning(f"Failed to save fragment: {e}")
+
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
@@ -154,6 +181,7 @@ async def save_note(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for i, note in enumerate(messages_to_save):
             logging.info(f"Message {i+1}: type={note.get('message_type')}")
             await storage.save_note(spreadsheet_id, note)
+            _save_to_fragments(note, user_id)
         await update.message.set_reaction(reaction=ReactionTypeEmoji(emoji="✍️"))
     except Exception as e:
         logging.error(f"Error saving: {e}")
@@ -221,6 +249,7 @@ async def save_voice_note(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         await storage.save_note(spreadsheet_id, note_data)
+        _save_to_fragments(note_data, user_id)
         logging.info(f"Saved voice note: {len(content)} chars, {voice_data.get('duration', 0)}s")
     except Exception as e:
         logging.error(f"Error saving voice note: {e}")
