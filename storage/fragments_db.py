@@ -189,7 +189,7 @@ def search_by_embedding(embedding: list[float], limit: int = 10) -> list[dict]:
                 Fragment.embedding.cosine_distance(embedding).label('distance')
             )
             .filter(Fragment.embedding.isnot(None))
-            .filter(Fragment.is_duplicate.is_(False))
+            .filter(Fragment.is_duplicate.isnot(True))
             .order_by('distance')
             .limit(limit)
             .all()
@@ -221,7 +221,7 @@ def get_unembedded_fragments(limit: int = 100) -> list[dict]:
         results = (
             session.query(Fragment.id, Fragment.text)
             .filter(Fragment.embedding.is_(None))
-            .filter(Fragment.is_duplicate.is_(False))
+            .filter(Fragment.is_duplicate.isnot(True))
             .limit(limit)
             .all()
         )
@@ -281,7 +281,7 @@ def find_near_duplicates(
                 Fragment.embedding.cosine_distance(embedding).label('distance')
             )
             .filter(Fragment.embedding.isnot(None))
-            .filter(Fragment.is_duplicate.is_(False))
+            .filter(Fragment.is_duplicate.isnot(True))
             .filter(
                 Fragment.embedding.cosine_distance(embedding) < (1 - threshold)
             )

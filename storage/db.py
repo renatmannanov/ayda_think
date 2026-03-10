@@ -76,6 +76,20 @@ def init_db():
 
     Base.metadata.create_all(bind=engine)
 
+    # Fix NULL booleans: set default values for is_duplicate/is_outdated
+    if not DATABASE_URL.startswith("sqlite"):
+        try:
+            with engine.connect() as conn:
+                conn.execute(text(
+                    "UPDATE fragments SET is_duplicate = false WHERE is_duplicate IS NULL"
+                ))
+                conn.execute(text(
+                    "UPDATE fragments SET is_outdated = false WHERE is_outdated IS NULL"
+                ))
+                conn.commit()
+        except Exception as e:
+            logging.warning(f"Could not fix NULL booleans: {e}")
+
     # Create HNSW index for embeddings (only if pgvector is available)
     if pgvector_available:
         try:

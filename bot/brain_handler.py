@@ -8,12 +8,9 @@ import os
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from sqlalchemy import text as sa_text
-
 from services.transcription_service import get_openai_client
 from services.normalizer_service import normalize_all
-from storage.fragments_db import search_by_embedding, get_fragments_count, Fragment, _pgvector_available
-from storage.db import SessionLocal, engine
+from storage.fragments_db import search_by_embedding, get_fragments_count
 
 logger = logging.getLogger(__name__)
 
@@ -80,47 +77,6 @@ async def normalize_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     status_msg = await message.reply_text("⏳ Запускаю нормализацию...")
 
     try:
-        # Diagnostic: check mapper, raw SQL, ORM
-        import storage.db as _db
-        mapper_cols = [c.key for c in Fragment.__table__.columns]
-        has_emb_attr = hasattr(Fragment, 'embedding')
-        has_emb_col = 'embedding' in mapper_cols
-        pgv = _pgvector_available()
-        pgv_db = _db.pgvector_available
-
-        with engine.connect() as conn:
-            raw_total = conn.execute(sa_text("SELECT count(*) FROM fragments")).scalar()
-            raw_null_emb = conn.execute(sa_text(
-                "SELECT count(*) FROM fragments WHERE embedding IS NULL"
-            )).scalar()
-            # Check is_duplicate values distribution
-            dup_false = conn.execute(sa_text(
-                "SELECT count(*) FROM fragments WHERE is_duplicate = false"
-            )).scalar()
-            dup_true = conn.execute(sa_text(
-                "SELECT count(*) FROM fragments WHERE is_duplicate = true"
-            )).scalar()
-            dup_null = conn.execute(sa_text(
-                "SELECT count(*) FROM fragments WHERE is_duplicate IS NULL"
-            )).scalar()
-            # The actual query that get_unembedded_fragments uses
-            raw_unembedded = conn.execute(sa_text(
-                "SELECT count(*) FROM fragments WHERE embedding IS NULL AND is_duplicate = false"
-            )).scalar()
-
-        from storage.fragments_db import get_unembedded_fragments
-        unemb_result = get_unembedded_fragments(limit=5)
-
-        diag = (
-            f"DIAG: pgv_avail={pgv}, pgv_db={pgv_db}\n"
-            f"  has_emb_col={has_emb_col}\n"
-            f"  raw_total={raw_total}, raw_null_emb={raw_null_emb}\n"
-            f"  is_dup: false={dup_false}, true={dup_true}, null={dup_null}\n"
-            f"  raw_unembedded(emb=NULL AND dup=false)={raw_unembedded}\n"
-            f"  get_unembedded_fragments(5)={len(unemb_result)} items"
-        )
-        logger.info(diag)
-
         result = normalize_all()
         total = get_fragments_count()
         await status_msg.edit_text(
@@ -128,9 +84,8 @@ async def normalize_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"  Эмбеддинги: {result['embedded']}\n"
             f"  Дубликаты: {result['duplicates']}\n"
             f"  Ошибки: {result['errors']}\n"
-            f"  Всего в БД: {total}\n\n"
-            f"DEBUG:\n{diag}"
+            f"  Всего в БД: {total}"
         )
     except Exception as e:
-        logger.error(f"Normalize error: {e}", exc_info=True)
+        logger.error(f"Normalize error: {e}")
         await status_msg.edit_text(f"❌ Ошибка нормализации: {e}")
