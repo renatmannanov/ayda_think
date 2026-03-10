@@ -310,7 +310,7 @@ def search_hybrid(
             for t in tags:
                 if t in r['tags']:
                     matched += 1
-        text_lower = r['text'].lower() if r['_keyword'] else ''
+        text_lower = r['text'].lower()
         for group in groups:
             if any(stem.lower() in text_lower for stem in group):
                 matched += 1
