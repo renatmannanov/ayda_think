@@ -181,6 +181,7 @@ def search_by_embedding(embedding: list[float], limit: int = 10) -> list[dict]:
         results = (
             session.query(
                 Fragment.id,
+                Fragment.external_id,
                 Fragment.text,
                 Fragment.source,
                 Fragment.tags,
@@ -197,6 +198,7 @@ def search_by_embedding(embedding: list[float], limit: int = 10) -> list[dict]:
         return [
             {
                 'id': r.id,
+                'external_id': r.external_id,
                 'text': r.text,
                 'source': r.source,
                 'tags': r.tags,
