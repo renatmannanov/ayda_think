@@ -8,6 +8,7 @@ from bot.handlers import start, handle_message, handle_edited_message
 
 from bot.channel_integration import link_channel_handler, channel_post_handler, edited_channel_post_handler
 from bot.tag_handler import tag_command
+from bot.brain_handler import search_command, normalize_command
 
 # Configure logging
 logging.basicConfig(
@@ -33,6 +34,8 @@ def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("link_channel", link_channel_handler))
     application.add_handler(CommandHandler("tag", tag_command))
+    application.add_handler(CommandHandler("search", search_command))
+    application.add_handler(CommandHandler("normalize", normalize_command))
     
     # Handle channel posts
     application.add_handler(MessageHandler(filters.UpdateType.CHANNEL_POST, channel_post_handler))

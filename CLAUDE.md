@@ -99,6 +99,7 @@ ayda_think/
 │   ├── note_handler.py      # Save text/voice/forward notes
 │   ├── voice_handler.py     # Download + transcribe audio
 │   ├── tag_handler.py       # /tag command
+│   ├── brain_handler.py     # /search + /normalize commands
 │   ├── channel_integration.py   # Channel → user DM sync
 │   ├── forward_utils.py     # Extract forward metadata
 │   └── utils.py             # User/spreadsheet lookups
@@ -106,6 +107,7 @@ ayda_think/
 ├── services/
 │   ├── note_service.py      # Notes CRUD for API
 │   ├── transcription_service.py  # Whisper + GPT
+│   ├── normalizer_service.py    # Embeddings, language detection, dedup
 │   └── relation_service.py  # Tag-based relations + reply chains
 │
 ├── storage/
@@ -157,7 +159,17 @@ ayda_think/
 | POST | `/api/notes/{id}/status` | Update note status |
 | GET | `/api/notes/{id}/related?user_id=X` | Related notes by tags |
 | GET | `/api/notes/{id}/replies?user_id=X` | Reply chain tree |
-| POST | `/api/fragments` | Ingest fragments (requires X-API-Key) |
+| POST | `/api/fragments` | Ingest fragments + auto-normalize (requires X-API-Key) |
+
+## Bot Commands
+
+| Command | Description | Access |
+|---------|-------------|--------|
+| `/start` | Registration flow | All users |
+| `/tag #a #b` | Add tags to replied message | All users |
+| `/link_channel` | Link channel to user | All users |
+| `/search <query>` | Semantic search across fragments | All users |
+| `/normalize` | Run normalization on unembedded fragments | Admin only |
 
 ## Critical Rules
 

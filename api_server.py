@@ -9,6 +9,7 @@ from schemas import (
     FragmentsRequest, FragmentsResponse
 )
 from storage.fragments_db import insert_fragments_batch, get_fragments_count
+from services.normalizer_service import normalize_fragments
 from bot.utils import get_user_spreadsheet
 from datetime import datetime
 import os
@@ -220,6 +221,15 @@ async def ingest_fragments(
         total = get_fragments_count()
 
         logging.info(f"Fragments ingested: {result['indexed']} new, {result['duplicates_skipped']} skipped")
+
+        # Auto-normalize new fragments (embeddings + language + dedup)
+        if result['inserted_ids']:
+            try:
+                norm_result = normalize_fragments(result['inserted_ids'])
+                logging.info(f"Auto-normalized: {norm_result['embedded']} embedded, "
+                             f"{norm_result['duplicates']} duplicates, {norm_result['errors']} errors")
+            except Exception as e:
+                logging.error(f"Auto-normalization failed (fragments saved OK): {e}")
 
         return FragmentsResponse(
             indexed=result['indexed'],

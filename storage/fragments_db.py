@@ -109,11 +109,12 @@ def insert_fragment(
 def insert_fragments_batch(fragments: list[dict]) -> dict:
     """
     Insert multiple fragments. Skips duplicates by external_id.
-    Returns {'indexed': N, 'duplicates_skipped': N}.
+    Returns {'indexed': N, 'duplicates_skipped': N, 'inserted_ids': [int]}.
     """
     session = SessionLocal()
     indexed = 0
     skipped = 0
+    inserted_ids = []
     try:
         for f in fragments:
             # Check duplicate by external_id
@@ -135,6 +136,8 @@ def insert_fragments_batch(fragments: list[dict]) -> dict:
                 metadata_=f.get('metadata', {}),
             )
             session.add(frag)
+            session.flush()  # get frag.id before commit
+            inserted_ids.append(frag.id)
             indexed += 1
 
         session.commit()
@@ -144,7 +147,7 @@ def insert_fragments_batch(fragments: list[dict]) -> dict:
     finally:
         session.close()
 
-    return {'indexed': indexed, 'duplicates_skipped': skipped}
+    return {'indexed': indexed, 'duplicates_skipped': skipped, 'inserted_ids': inserted_ids}
 
 
 def get_fragments_count() -> int:
@@ -195,5 +198,107 @@ def search_by_embedding(embedding: list[float], limit: int = 10) -> list[dict]:
             }
             for r in results
         ]
+    finally:
+        session.close()
+
+
+def get_unembedded_fragments(limit: int = 100) -> list[dict]:
+    """Get fragments without embeddings (embedding IS NULL, is_duplicate=False)."""
+    if not pgvector_available:
+        logging.warning("get_unembedded_fragments called but pgvector is not available")
+        return []
+
+    session = SessionLocal()
+    try:
+        results = (
+            session.query(Fragment.id, Fragment.text)
+            .filter(Fragment.embedding.is_(None))
+            .filter(Fragment.is_duplicate.is_(False))
+            .limit(limit)
+            .all()
+        )
+        return [{'id': r.id, 'text': r.text} for r in results]
+    finally:
+        session.close()
+
+
+def update_embedding(fragment_id: int, embedding: list[float]) -> None:
+    """Save embedding for a fragment."""
+    session = SessionLocal()
+    try:
+        session.query(Fragment).filter(Fragment.id == fragment_id).update(
+            {Fragment.embedding: embedding}
+        )
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+
+def update_fragment_fields(fragment_id: int, **fields) -> None:
+    """Update arbitrary fields (language, is_duplicate, is_outdated)."""
+    session = SessionLocal()
+    try:
+        session.query(Fragment).filter(Fragment.id == fragment_id).update(
+            {getattr(Fragment, k): v for k, v in fields.items()}
+        )
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+
+def find_near_duplicates(
+    embedding: list[float],
+    threshold: float = 0.95,
+    exclude_id: int | None = None,
+) -> list[dict]:
+    """Find fragments with cosine similarity > threshold.
+    Only compares against originals (is_duplicate=False).
+    """
+    if not pgvector_available:
+        logging.warning("find_near_duplicates called but pgvector is not available")
+        return []
+
+    session = SessionLocal()
+    try:
+        query = (
+            session.query(
+                Fragment.id,
+                Fragment.text,
+                Fragment.embedding.cosine_distance(embedding).label('distance')
+            )
+            .filter(Fragment.embedding.isnot(None))
+            .filter(Fragment.is_duplicate.is_(False))
+            .filter(
+                Fragment.embedding.cosine_distance(embedding) < (1 - threshold)
+            )
+        )
+        if exclude_id is not None:
+            query = query.filter(Fragment.id != exclude_id)
+
+        results = query.order_by('distance').all()
+        return [
+            {'id': r.id, 'text': r.text, 'distance': float(r.distance)}
+            for r in results
+        ]
+    finally:
+        session.close()
+
+
+def get_fragments_by_ids(fragment_ids: list[int]) -> list[dict]:
+    """Get fragments by list of IDs."""
+    session = SessionLocal()
+    try:
+        results = (
+            session.query(Fragment.id, Fragment.text)
+            .filter(Fragment.id.in_(fragment_ids))
+            .all()
+        )
+        return [{'id': r.id, 'text': r.text} for r in results]
     finally:
         session.close()
