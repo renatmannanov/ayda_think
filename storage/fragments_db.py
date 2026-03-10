@@ -317,11 +317,11 @@ def search_hybrid(
 
         # Bonus proportional to fraction of words matched
         if total_words > 0 and matched > 0:
-            keyword_bonus = 0.5 * (matched / total_words)
+            keyword_bonus = 0.7 * (matched / total_words)
         else:
             keyword_bonus = 0.0
 
-        final_score = semantic_score * 0.6 + keyword_bonus
+        final_score = semantic_score * 0.4 + keyword_bonus
         r['distance'] = round(1.0 - final_score, 4)
         scored.append((final_score, r))
 
