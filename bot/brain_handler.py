@@ -93,23 +93,31 @@ async def normalize_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             raw_null_emb = conn.execute(sa_text(
                 "SELECT count(*) FROM fragments WHERE embedding IS NULL"
             )).scalar()
+            # Check is_duplicate values distribution
+            dup_false = conn.execute(sa_text(
+                "SELECT count(*) FROM fragments WHERE is_duplicate = false"
+            )).scalar()
+            dup_true = conn.execute(sa_text(
+                "SELECT count(*) FROM fragments WHERE is_duplicate = true"
+            )).scalar()
+            dup_null = conn.execute(sa_text(
+                "SELECT count(*) FROM fragments WHERE is_duplicate IS NULL"
+            )).scalar()
+            # The actual query that get_unembedded_fragments uses
+            raw_unembedded = conn.execute(sa_text(
+                "SELECT count(*) FROM fragments WHERE embedding IS NULL AND is_duplicate = false"
+            )).scalar()
 
-        session = SessionLocal()
-        try:
-            orm_null = session.query(Fragment).filter(
-                Fragment.embedding.is_(None)
-            ).count() if has_emb_attr else -1
-        except Exception as ex:
-            orm_null = f"ERROR: {ex}"
-        finally:
-            session.close()
+        from storage.fragments_db import get_unembedded_fragments
+        unemb_result = get_unembedded_fragments(limit=5)
 
         diag = (
-            f"DIAG: pgv_import={True}, pgv_db={pgv_db}, pgv_avail={pgv}\n"
-            f"  has_emb_attr={has_emb_attr}, has_emb_col={has_emb_col}\n"
-            f"  mapper_cols={mapper_cols}\n"
+            f"DIAG: pgv_avail={pgv}, pgv_db={pgv_db}\n"
+            f"  has_emb_col={has_emb_col}\n"
             f"  raw_total={raw_total}, raw_null_emb={raw_null_emb}\n"
-            f"  orm_null_emb={orm_null}"
+            f"  is_dup: false={dup_false}, true={dup_true}, null={dup_null}\n"
+            f"  raw_unembedded(emb=NULL AND dup=false)={raw_unembedded}\n"
+            f"  get_unembedded_fragments(5)={len(unemb_result)} items"
         )
         logger.info(diag)
 
