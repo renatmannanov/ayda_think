@@ -74,11 +74,11 @@ async def normalize_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await message.reply_text("⛔ Нет доступа.")
         return
 
-    await message.reply_text("⏳ Запускаю нормализацию...")
+    status_msg = await message.reply_text("⏳ Запускаю нормализацию...")
 
     try:
         result = normalize_all()
-        await message.reply_text(
+        await status_msg.edit_text(
             f"✅ Нормализация завершена:\n"
             f"  Эмбеддинги: {result['embedded']}\n"
             f"  Дубликаты: {result['duplicates']}\n"
@@ -86,4 +86,4 @@ async def normalize_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     except Exception as e:
         logger.error(f"Normalize error: {e}")
-        await message.reply_text(f"❌ Ошибка нормализации: {e}")
+        await status_msg.edit_text(f"❌ Ошибка нормализации: {e}")

@@ -12,13 +12,24 @@ from datetime import datetime
 from typing import Optional
 import logging
 
-from storage.db import Base, SessionLocal, pgvector_available
+import storage.db as _db
+from storage.db import Base, SessionLocal
 
 # ---------------------------------------------------------------------------
 # Conditional pgvector import
 # ---------------------------------------------------------------------------
-if pgvector_available:
+# Read pgvector_available dynamically from db module (not a copied value)
+# because init_db() sets it to True AFTER this module may have been imported.
+try:
     from pgvector.sqlalchemy import Vector
+    _pgvector_import_ok = True
+except ImportError:
+    _pgvector_import_ok = False
+
+
+def _pgvector_available() -> bool:
+    """Check if pgvector is available (reads live value from db module)."""
+    return _db.pgvector_available and _pgvector_import_ok
 
 # ---------------------------------------------------------------------------
 # Models
@@ -41,8 +52,8 @@ class Fragment(Base):
     is_outdated = Column(Boolean, default=False)
 
 
-# Add embedding column only if pgvector is available
-if pgvector_available:
+# Add embedding column only if pgvector package is importable
+if _pgvector_import_ok:
     Fragment.embedding = Column(Vector(1536), nullable=True)
 
 
@@ -164,7 +175,7 @@ def search_by_embedding(embedding: list[float], limit: int = 10) -> list[dict]:
     Find closest fragments by cosine distance.
     Requires pgvector to be available and embeddings to be set.
     """
-    if not pgvector_available:
+    if not _pgvector_available():
         logging.warning("search_by_embedding called but pgvector is not available")
         return []
 
@@ -204,7 +215,7 @@ def search_by_embedding(embedding: list[float], limit: int = 10) -> list[dict]:
 
 def get_unembedded_fragments(limit: int = 100) -> list[dict]:
     """Get fragments without embeddings (embedding IS NULL, is_duplicate=False)."""
-    if not pgvector_available:
+    if not _pgvector_available():
         logging.warning("get_unembedded_fragments called but pgvector is not available")
         return []
 
@@ -260,7 +271,7 @@ def find_near_duplicates(
     """Find fragments with cosine similarity > threshold.
     Only compares against originals (is_duplicate=False).
     """
-    if not pgvector_available:
+    if not _pgvector_available():
         logging.warning("find_near_duplicates called but pgvector is not available")
         return []
 
