@@ -1,6 +1,7 @@
 """
-Clustering service: HDBSCAN clustering of fragment embeddings.
+Clustering service: UMAP + HDBSCAN clustering of fragment embeddings.
 Groups semantically similar fragments into clusters (chains).
+Pipeline: 1536-dim embeddings → UMAP(50 dims) → HDBSCAN.
 """
 
 import logging
@@ -8,6 +9,7 @@ from collections import Counter
 
 import numpy as np
 import hdbscan
+import umap
 
 from storage.fragments_db import (
     get_all_embedded_fragments,
@@ -17,9 +19,14 @@ from storage.fragments_db import (
 
 logger = logging.getLogger(__name__)
 
+# UMAP defaults
+UMAP_N_COMPONENTS = 50
+UMAP_N_NEIGHBORS = 15
+UMAP_RANDOM_STATE = 42
+
 
 def run_clustering(min_cluster_size: int = 5, min_samples: int = 3) -> dict:
-    """Run HDBSCAN clustering on all embedded fragments.
+    """Run UMAP dimensionality reduction + HDBSCAN clustering.
 
     Args:
         min_cluster_size: minimum number of fragments to form a cluster
@@ -37,23 +44,31 @@ def run_clustering(min_cluster_size: int = 5, min_samples: int = 3) -> dict:
     n_total = len(fragments)
     logger.info(f"Clustering {n_total} fragments (min_cluster_size={min_cluster_size}, min_samples={min_samples})")
 
-    # 2. Build numpy matrix, L2-normalize so euclidean ≈ cosine
+    # 2. Build numpy matrix
     ids = [f['id'] for f in fragments]
     matrix = np.array([f['embedding'] for f in fragments])
-    norms = np.linalg.norm(matrix, axis=1, keepdims=True)
-    norms[norms == 0] = 1  # avoid division by zero
-    matrix = matrix / norms
 
-    # 3. HDBSCAN (euclidean on L2-normalized vectors ≈ cosine distance)
+    # 3. UMAP: reduce 1536 dims → 50 dims (cosine metric preserves semantic similarity)
+    logger.info(f"UMAP reducing {matrix.shape[1]} → {UMAP_N_COMPONENTS} dimensions")
+    reducer = umap.UMAP(
+        n_components=UMAP_N_COMPONENTS,
+        metric='cosine',
+        n_neighbors=UMAP_N_NEIGHBORS,
+        min_dist=0.0,
+        random_state=UMAP_RANDOM_STATE,
+    )
+    reduced = reducer.fit_transform(matrix)
+
+    # 4. HDBSCAN on reduced embeddings (euclidean works well after UMAP)
     clusterer = hdbscan.HDBSCAN(
         min_cluster_size=min_cluster_size,
         min_samples=min_samples,
         metric='euclidean',
-        cluster_selection_method='eom',  # excess of mass — better for uneven clusters
+        cluster_selection_method='eom',
     )
-    labels = clusterer.fit_predict(matrix)
+    labels = clusterer.fit_predict(reduced)
 
-    # 4. Group fragments by label
+    # 5. Group fragments by label
     cluster_map = {}  # label -> [indices]
     n_noise = 0
     for idx, label in enumerate(labels):
@@ -65,7 +80,7 @@ def run_clustering(min_cluster_size: int = 5, min_samples: int = 3) -> dict:
     n_clusters = len(cluster_map)
     logger.info(f"HDBSCAN result: {n_clusters} clusters, {n_noise} noise fragments")
 
-    # 5. Build cluster data
+    # 6. Build cluster data
     version = (get_latest_cluster_version() or 0) + 1
     clusters_data = []
 
@@ -86,7 +101,7 @@ def run_clustering(min_cluster_size: int = 5, min_samples: int = 3) -> dict:
     # Sort by size DESC for saving
     clusters_data.sort(key=lambda c: c['size'], reverse=True)
 
-    # 6. Save to DB
+    # 7. Save to DB
     save_cluster_results(version, clusters_data)
     logger.info(f"Saved clustering v{version}: {n_clusters} clusters")
 
