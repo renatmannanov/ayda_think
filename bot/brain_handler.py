@@ -179,7 +179,7 @@ async def normalize_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def cluster_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /cluster [eps] [min_samples] — run DBSCAN clustering (admin only)."""
+    """Handle /cluster [min_cluster_size] [min_samples] — run HDBSCAN clustering (admin only)."""
     message = update.message
     if update.effective_user.id != ADMIN_USER_ID:
         await message.reply_text("⛔ Нет доступа.")
@@ -187,13 +187,13 @@ async def cluster_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Parse optional params
     args = list(context.args) if context.args else []
-    eps = 0.35
+    min_cluster_size = 5
     min_samples = 3
     if len(args) >= 1:
         try:
-            eps = float(args[0])
+            min_cluster_size = int(args[0])
         except ValueError:
-            await message.reply_text("Использование: /cluster [eps] [min_samples]\nПример: /cluster 0.3 5")
+            await message.reply_text("Использование: /cluster [min_cluster_size] [min_samples]\nПример: /cluster 5 3")
             return
     if len(args) >= 2:
         try:
@@ -201,10 +201,10 @@ async def cluster_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except ValueError:
             pass
 
-    status_msg = await message.reply_text(f"⏳ Кластеризация (eps={eps}, min={min_samples})...")
+    status_msg = await message.reply_text(f"⏳ Кластеризация (min_size={min_cluster_size}, min_samples={min_samples})...")
 
     try:
-        result = run_clustering(eps=eps, min_samples=min_samples)
+        result = run_clustering(min_cluster_size=min_cluster_size, min_samples=min_samples)
 
         lines = [
             f"✅ Кластеризация v{result['version']}:",

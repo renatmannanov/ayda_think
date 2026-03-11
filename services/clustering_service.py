@@ -1,5 +1,5 @@
 """
-Clustering service: DBSCAN clustering of fragment embeddings.
+Clustering service: HDBSCAN clustering of fragment embeddings.
 Groups semantically similar fragments into clusters (chains).
 """
 
@@ -7,7 +7,7 @@ import logging
 from collections import Counter
 
 import numpy as np
-from sklearn.cluster import DBSCAN
+import hdbscan
 
 from storage.fragments_db import (
     get_all_embedded_fragments,
@@ -18,12 +18,12 @@ from storage.fragments_db import (
 logger = logging.getLogger(__name__)
 
 
-def run_clustering(eps: float = 0.35, min_samples: int = 3) -> dict:
-    """Run DBSCAN clustering on all embedded fragments.
+def run_clustering(min_cluster_size: int = 5, min_samples: int = 3) -> dict:
+    """Run HDBSCAN clustering on all embedded fragments.
 
     Args:
-        eps: max cosine distance between neighbors (lower = stricter clusters)
-        min_samples: min fragments to form a cluster
+        min_cluster_size: minimum number of fragments to form a cluster
+        min_samples: controls how conservative clustering is (higher = more noise)
 
     Returns:
         {version, n_clusters, n_noise, n_total,
@@ -35,15 +35,20 @@ def run_clustering(eps: float = 0.35, min_samples: int = 3) -> dict:
         return {'version': 0, 'n_clusters': 0, 'n_noise': 0, 'n_total': 0, 'clusters': []}
 
     n_total = len(fragments)
-    logger.info(f"Clustering {n_total} fragments (eps={eps}, min_samples={min_samples})")
+    logger.info(f"Clustering {n_total} fragments (min_cluster_size={min_cluster_size}, min_samples={min_samples})")
 
     # 2. Build numpy matrix
     ids = [f['id'] for f in fragments]
     matrix = np.array([f['embedding'] for f in fragments])
 
-    # 3. DBSCAN
-    db = DBSCAN(eps=eps, min_samples=min_samples, metric='cosine')
-    labels = db.fit_predict(matrix)
+    # 3. HDBSCAN
+    clusterer = hdbscan.HDBSCAN(
+        min_cluster_size=min_cluster_size,
+        min_samples=min_samples,
+        metric='euclidean',
+        cluster_selection_method='eom',  # excess of mass — better for uneven clusters
+    )
+    labels = clusterer.fit_predict(matrix)
 
     # 4. Group fragments by label
     cluster_map = {}  # label -> [indices]
@@ -55,7 +60,7 @@ def run_clustering(eps: float = 0.35, min_samples: int = 3) -> dict:
         cluster_map.setdefault(label, []).append(idx)
 
     n_clusters = len(cluster_map)
-    logger.info(f"DBSCAN result: {n_clusters} clusters, {n_noise} noise fragments")
+    logger.info(f"HDBSCAN result: {n_clusters} clusters, {n_noise} noise fragments")
 
     # 5. Build cluster data
     version = (get_latest_cluster_version() or 0) + 1
