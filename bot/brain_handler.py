@@ -15,7 +15,7 @@ from services.synthesis_service import synthesize
 from storage.fragments_db import (
     search_by_embedding, search_hybrid, get_fragments_count,
     get_latest_cluster_version, get_fragments_clusters,
-    get_cluster_fragments, save_artifact,
+    save_artifact,
 )
 
 logger = logging.getLogger(__name__)
@@ -315,11 +315,10 @@ async def artifact_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await status_msg.edit_text(f"🔍 По теме «{topic}» ничего не найдено.")
             return
 
-        # 3. Cluster context: pull all fragments from relevant clusters
+        # 3. Cluster info (label only, don't pull cluster fragments — they dilute relevance)
         version = get_latest_cluster_version()
         primary_cluster_id = None
         primary_cluster_name = None
-        all_fragments = {r['id']: r for r in search_results}
 
         if version:
             frag_ids = [r['id'] for r in search_results]
@@ -336,14 +335,8 @@ async def artifact_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     next(fid for fid, cl in cluster_map.items() if cl['id'] == primary_cluster_id)
                 ]['name']
 
-                # Pull all fragments from primary cluster
-                cluster_frags = get_cluster_fragments(primary_cluster_id, limit=500)
-                for cf in cluster_frags:
-                    if cf['id'] not in all_fragments:
-                        all_fragments[cf['id']] = cf
-
-        # 4. Sort by date
-        fragments = sorted(all_fragments.values(), key=lambda f: f.get('created_at', ''))
+        # 4. Sort by date — use only search results
+        fragments = sorted(search_results, key=lambda f: f.get('created_at', ''))
 
         await status_msg.edit_text(
             f"⏳ Анализирую тему «{topic}»...\n"
