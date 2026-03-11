@@ -11,9 +11,11 @@ from telegram.ext import ContextTypes
 from services.transcription_service import get_openai_client
 from services.normalizer_service import normalize_all
 from services.clustering_service import run_clustering
+from services.synthesis_service import synthesize
 from storage.fragments_db import (
     search_by_embedding, search_hybrid, get_fragments_count,
     get_latest_cluster_version, get_fragments_clusters,
+    get_cluster_fragments, save_artifact,
 )
 
 logger = logging.getLogger(__name__)
@@ -276,3 +278,134 @@ async def cluster_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await status_msg.edit_text(f"❌ Ошибка кластеризации: {e}")
 
 
+async def artifact_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /artifact [topic] — GPT synthesis of thought evolution."""
+    message = update.message
+    topic = " ".join(context.args) if context.args else ""
+
+    if not topic:
+        await message.reply_text(
+            "Использование: /artifact <тема>\n"
+            "Пример: /artifact чайный бизнес"
+        )
+        return
+
+    status_msg = await message.reply_text(f"⏳ Анализирую тему «{topic}»...")
+
+    try:
+        # 1. Embed query
+        client = get_openai_client()
+        resp = client.embeddings.create(model="text-embedding-3-small", input=topic)
+        query_embedding = resp.data[0].embedding
+
+        # 2. Hybrid search (more results than /search)
+        _, search_tags, keyword_groups = _parse_search_query(topic)
+        all_keywords = [kw for group in keyword_groups for kw in group]
+
+        if search_tags or keyword_groups:
+            search_results = search_hybrid(
+                query_embedding, tags=search_tags,
+                keywords=all_keywords, keyword_groups=keyword_groups,
+                limit=30,
+            )
+        else:
+            search_results = search_by_embedding(query_embedding, limit=30)
+
+        if not search_results:
+            await status_msg.edit_text(f"🔍 По теме «{topic}» ничего не найдено.")
+            return
+
+        # 3. Cluster context: pull all fragments from relevant clusters
+        version = get_latest_cluster_version()
+        primary_cluster_id = None
+        primary_cluster_name = None
+        all_fragments = {r['id']: r for r in search_results}
+
+        if version:
+            frag_ids = [r['id'] for r in search_results]
+            cluster_map = get_fragments_clusters(frag_ids, version)
+
+            # Find the most common cluster among search results
+            cluster_counts = {}
+            for fid, cl in cluster_map.items():
+                cluster_counts[cl['id']] = cluster_counts.get(cl['id'], 0) + 1
+
+            if cluster_counts:
+                primary_cluster_id = max(cluster_counts, key=cluster_counts.get)
+                primary_cluster_name = cluster_map[
+                    next(fid for fid, cl in cluster_map.items() if cl['id'] == primary_cluster_id)
+                ]['name']
+
+                # Pull all fragments from primary cluster
+                cluster_frags = get_cluster_fragments(primary_cluster_id, limit=500)
+                for cf in cluster_frags:
+                    if cf['id'] not in all_fragments:
+                        all_fragments[cf['id']] = cf
+
+        # 4. Sort by date
+        fragments = sorted(all_fragments.values(), key=lambda f: f.get('created_at', ''))
+
+        await status_msg.edit_text(
+            f"⏳ Анализирую тему «{topic}»...\n"
+            f"📊 Найдено {len(fragments)} заметок"
+            + (f" (кластер «{primary_cluster_name}»)" if primary_cluster_name else "")
+        )
+
+        # 5. Synthesize
+        result = synthesize(topic, fragments)
+
+        # 6. Save artifact
+        artifact_id = save_artifact(
+            topic=topic,
+            content=result['content'],
+            fragment_ids=result['fragment_ids'],
+            cluster_id=primary_cluster_id,
+        )
+
+        # 7. Format and send response
+        header = f"🧬 Артефакт #{artifact_id}: «{topic}»"
+        meta_parts = [f"{len(result['fragment_ids'])} заметок"]
+        if primary_cluster_name:
+            meta_parts.append(f"📦 {primary_cluster_name}")
+        header += f"\n📊 {' | '.join(meta_parts)}\n"
+
+        full_text = header + "\n" + result['content']
+
+        # Split if > 4096 chars (Telegram limit)
+        await _send_long_message(status_msg, full_text)
+
+    except Exception as e:
+        logger.error(f"Artifact error: {e}", exc_info=True)
+        await status_msg.edit_text(f"❌ Ошибка: {e}")
+
+
+async def _send_long_message(status_msg, text: str, max_len: int = 4096):
+    """Send text, splitting into multiple messages if needed."""
+    if len(text) <= max_len:
+        await status_msg.edit_text(text)
+        return
+
+    # First chunk: edit the status message
+    chunks = _split_text(text, max_len)
+    await status_msg.edit_text(chunks[0])
+
+    # Remaining chunks: send as new messages
+    chat_id = status_msg.chat_id
+    for chunk in chunks[1:]:
+        await status_msg.get_bot().send_message(chat_id=chat_id, text=chunk)
+
+
+def _split_text(text: str, max_len: int = 4096) -> list[str]:
+    """Split text into chunks, preferring line breaks."""
+    chunks = []
+    while text:
+        if len(text) <= max_len:
+            chunks.append(text)
+            break
+        # Find last newline before max_len
+        split_at = text.rfind('\n', 0, max_len)
+        if split_at == -1 or split_at < max_len // 2:
+            split_at = max_len
+        chunks.append(text[:split_at])
+        text = text[split_at:].lstrip('\n')
+    return chunks
