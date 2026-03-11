@@ -37,11 +37,14 @@ def run_clustering(min_cluster_size: int = 5, min_samples: int = 3) -> dict:
     n_total = len(fragments)
     logger.info(f"Clustering {n_total} fragments (min_cluster_size={min_cluster_size}, min_samples={min_samples})")
 
-    # 2. Build numpy matrix
+    # 2. Build numpy matrix, L2-normalize so euclidean ≈ cosine
     ids = [f['id'] for f in fragments]
     matrix = np.array([f['embedding'] for f in fragments])
+    norms = np.linalg.norm(matrix, axis=1, keepdims=True)
+    norms[norms == 0] = 1  # avoid division by zero
+    matrix = matrix / norms
 
-    # 3. HDBSCAN
+    # 3. HDBSCAN (euclidean on L2-normalized vectors ≈ cosine distance)
     clusterer = hdbscan.HDBSCAN(
         min_cluster_size=min_cluster_size,
         min_samples=min_samples,
