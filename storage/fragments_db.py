@@ -78,6 +78,17 @@ class FragmentCluster(Base):
     version = Column(Integer, primary_key=True)
 
 
+class Artifact(Base):
+    __tablename__ = 'artifacts'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    topic = Column(Text, nullable=False)
+    content = Column(Text, nullable=False)
+    cluster_id = Column(Integer, ForeignKey('clusters.id'), nullable=True)
+    fragment_ids = Column(ARRAY(Integer), default=[])
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 # ---------------------------------------------------------------------------
 # CRUD
 # ---------------------------------------------------------------------------
@@ -605,3 +616,89 @@ def get_fragments_clusters(fragment_ids: list[int], version: int) -> dict[int, d
         }
     finally:
         session.close()
+
+
+# ---------------------------------------------------------------------------
+# Artifact CRUD
+# ---------------------------------------------------------------------------
+
+def save_artifact(
+    topic: str,
+    content: str,
+    fragment_ids: list[int],
+    cluster_id: int | None = None,
+) -> int:
+    """Save artifact. Returns id."""
+    session = SessionLocal()
+    try:
+        artifact = Artifact(
+            topic=topic,
+            content=content,
+            fragment_ids=fragment_ids,
+            cluster_id=cluster_id,
+        )
+        session.add(artifact)
+        session.commit()
+        return artifact.id
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+
+def get_artifacts_by_cluster(cluster_id: int) -> list[dict]:
+    """All artifacts for a cluster."""
+    session = SessionLocal()
+    try:
+        results = (
+            session.query(Artifact)
+            .filter(Artifact.cluster_id == cluster_id)
+            .order_by(Artifact.created_at.desc())
+            .all()
+        )
+        return [_artifact_to_dict(r) for r in results]
+    finally:
+        session.close()
+
+
+def get_artifacts_by_topic(topic_query: str, limit: int = 5) -> list[dict]:
+    """Search artifacts by topic (ILIKE)."""
+    session = SessionLocal()
+    try:
+        results = (
+            session.query(Artifact)
+            .filter(Artifact.topic.ilike(f'%{topic_query}%'))
+            .order_by(Artifact.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+        return [_artifact_to_dict(r) for r in results]
+    finally:
+        session.close()
+
+
+def get_latest_artifacts(limit: int = 10) -> list[dict]:
+    """Latest artifacts by date."""
+    session = SessionLocal()
+    try:
+        results = (
+            session.query(Artifact)
+            .order_by(Artifact.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+        return [_artifact_to_dict(r) for r in results]
+    finally:
+        session.close()
+
+
+def _artifact_to_dict(a: Artifact) -> dict:
+    return {
+        'id': a.id,
+        'topic': a.topic,
+        'content': a.content,
+        'cluster_id': a.cluster_id,
+        'fragment_ids': a.fragment_ids or [],
+        'created_at': a.created_at.isoformat() if a.created_at else None,
+    }
