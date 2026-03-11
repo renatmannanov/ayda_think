@@ -62,6 +62,7 @@ class Cluster(Base):
     label = Column(Integer, nullable=False)
     size = Column(Integer, default=0)
     preview = Column(Text, nullable=True)
+    name = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     __table_args__ = (
@@ -494,6 +495,7 @@ def save_cluster_results(version: int, clusters_data: list[dict]) -> None:
                 label=cd['label'],
                 size=cd['size'],
                 preview=cd['preview'],
+                name=cd.get('name', ''),
             )
             session.add(cluster)
             session.flush()  # get cluster.id
@@ -530,6 +532,7 @@ def get_clusters_by_version(version: int) -> list[dict]:
                 'label': r.label,
                 'size': r.size,
                 'preview': r.preview,
+                'name': r.name or '',
                 'created_at': r.created_at.isoformat() if r.created_at else None,
             }
             for r in results
@@ -569,5 +572,36 @@ def get_cluster_fragments(cluster_id: int, limit: int = 10, offset: int = 0) -> 
             }
             for r in results
         ]
+    finally:
+        session.close()
+
+
+def get_fragments_clusters(fragment_ids: list[int], version: int) -> dict[int, dict]:
+    """Get cluster info for multiple fragments in a single query.
+
+    Returns:
+        {fragment_id: {id, label, size, name}, ...}
+    """
+    if not fragment_ids:
+        return {}
+
+    session = SessionLocal()
+    try:
+        results = (
+            session.query(FragmentCluster.fragment_id, Cluster)
+            .join(Cluster, Cluster.id == FragmentCluster.cluster_id)
+            .filter(FragmentCluster.fragment_id.in_(fragment_ids))
+            .filter(FragmentCluster.version == version)
+            .all()
+        )
+        return {
+            r.fragment_id: {
+                'id': r.Cluster.id,
+                'label': r.Cluster.label,
+                'size': r.Cluster.size,
+                'name': r.Cluster.name or '',
+            }
+            for r in results
+        }
     finally:
         session.close()

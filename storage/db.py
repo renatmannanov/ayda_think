@@ -76,6 +76,17 @@ def init_db():
 
     Base.metadata.create_all(bind=engine)
 
+    # Add 'name' column to clusters table if it doesn't exist
+    if not DATABASE_URL.startswith("sqlite"):
+        try:
+            with engine.connect() as conn:
+                conn.execute(text(
+                    "ALTER TABLE clusters ADD COLUMN IF NOT EXISTS name TEXT"
+                ))
+                conn.commit()
+        except Exception as e:
+            logging.warning(f"Could not add 'name' column to clusters: {e}")
+
     # Fix NULL booleans: set default values for is_duplicate/is_outdated
     if not DATABASE_URL.startswith("sqlite"):
         try:

@@ -99,7 +99,7 @@ ayda_think/
 │   ├── note_handler.py      # Save text/voice/forward notes
 │   ├── voice_handler.py     # Download + transcribe audio
 │   ├── tag_handler.py       # /tag command
-│   ├── brain_handler.py     # /search + /normalize commands
+│   ├── brain_handler.py     # /search, /normalize, /cluster commands
 │   ├── channel_integration.py   # Channel → user DM sync
 │   ├── forward_utils.py     # Extract forward metadata
 │   └── utils.py             # User/spreadsheet lookups

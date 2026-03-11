@@ -13,7 +13,7 @@ from services.normalizer_service import normalize_all
 from services.clustering_service import run_clustering
 from storage.fragments_db import (
     search_by_embedding, search_hybrid, get_fragments_count,
-    get_latest_cluster_version, get_clusters_by_version, get_cluster_fragments,
+    get_latest_cluster_version, get_fragments_clusters,
 )
 
 logger = logging.getLogger(__name__)
@@ -120,6 +120,20 @@ async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await message.reply_text(f"🔍 По запросу \"{query}\" ничего не найдено.")
             return
 
+        # Get cluster info for results
+        version = get_latest_cluster_version()
+        cluster_map = {}
+        if version and results:
+            frag_ids = [r['id'] for r in results]
+            cluster_map = get_fragments_clusters(frag_ids, version)
+
+        # Count results per cluster for grouping
+        cluster_counts = {}
+        for r in results:
+            cl = cluster_map.get(r['id'])
+            if cl:
+                cluster_counts[cl['id']] = cluster_counts.get(cl['id'], 0) + 1
+
         # Format response
         header = f"🔍 Поиск: \"{query}\""
         if search_tags or keyword_groups:
@@ -131,19 +145,54 @@ async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parts.append(f"слова: {', '.join(originals)}")
             header += f"\n🏷 {' | '.join(parts)}"
         lines = [header + "\n"]
-        for i, r in enumerate(results, 1):
-            date = r['created_at'][:10]
-            text_preview = r['text'][:120].replace('\n', ' ')
-            if len(r['text']) > 120:
-                text_preview += "..."
-            distance = f"[{r['distance']:.2f}]"
-            link = _make_telegram_link(r.get('external_id'))
 
-            line = f"{i}. {distance} {date}"
-            line += f"\n   {text_preview}"
-            if link:
-                line += f"\n   {link}"
-            lines.append(line)
+        rendered_clusters = set()
+        idx = 1
+        for r in results:
+            cl = cluster_map.get(r['id'])
+            cl_id = cl['id'] if cl else None
+
+            # Group: >= 2 results from same cluster
+            if cl and cluster_counts.get(cl_id, 0) >= 2:
+                if cl_id in rendered_clusters:
+                    continue  # already rendered as group
+                rendered_clusters.add(cl_id)
+
+                cl_name = cl['name'] or cl['label']
+                lines.append(f"📦 {cl_name} ({cl['size']} фр., /chain {cl_id})")
+                for item in results:
+                    item_cl = cluster_map.get(item['id'])
+                    if not item_cl or item_cl['id'] != cl_id:
+                        continue
+                    date = item['created_at'][:10]
+                    text_preview = item['text'][:120].replace('\n', ' ')
+                    if len(item['text']) > 120:
+                        text_preview += "..."
+                    distance = f"[{item['distance']:.2f}]"
+                    link = _make_telegram_link(item.get('external_id'))
+                    line = f"  {idx}. {distance} {date}\n     {text_preview}"
+                    if link:
+                        line += f"\n     {link}"
+                    lines.append(line)
+                    idx += 1
+            else:
+                # Single result (with or without cluster)
+                date = r['created_at'][:10]
+                text_preview = r['text'][:120].replace('\n', ' ')
+                if len(r['text']) > 120:
+                    text_preview += "..."
+                distance = f"[{r['distance']:.2f}]"
+                link = _make_telegram_link(r.get('external_id'))
+
+                cl_tag = ""
+                if cl:
+                    cl_tag = f" 📦{(cl['name'] or str(cl['label']))[:30]}"
+                line = f"{idx}. {distance} {date}{cl_tag}"
+                line += f"\n   {text_preview}"
+                if link:
+                    line += f"\n   {link}"
+                lines.append(line)
+                idx += 1
 
         await message.reply_text("\n\n".join(lines), disable_web_page_preview=True)
 
@@ -201,7 +250,7 @@ async def cluster_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except ValueError:
             pass
 
-    status_msg = await message.reply_text(f"⏳ Кластеризация (min_size={min_cluster_size}, min_samples={min_samples})...")
+    status_msg = await message.reply_text(f"⏳ Кластеризация (min_size={min_cluster_size}, min_samples={min_samples})...\nГенерация AI-имён может занять ~20 сек.")
 
     try:
         result = run_clustering(min_cluster_size=min_cluster_size, min_samples=min_samples)
@@ -217,7 +266,9 @@ async def cluster_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if result['clusters']:
             lines.append("Топ-10:")
             for i, c in enumerate(result['clusters'][:10], 1):
-                lines.append(f"{i}. [{c['size']}] {c['preview'][:100]}")
+                name = c.get('name', '')
+                display = name if name else c['preview'][:100]
+                lines.append(f"{i}. [{c['size']}] {display}")
 
         await status_msg.edit_text("\n".join(lines))
     except Exception as e:
@@ -225,77 +276,3 @@ async def cluster_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await status_msg.edit_text(f"❌ Ошибка кластеризации: {e}")
 
 
-async def chains_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /chains [N] — show top N clusters of latest version."""
-    message = update.message
-
-    # Parse optional limit
-    args = list(context.args) if context.args else []
-    limit = 10
-    if args and args[0].isdigit():
-        limit = min(int(args[0]), 30)
-
-    version = get_latest_cluster_version()
-    if version is None:
-        await message.reply_text("Кластеров пока нет. Запусти /cluster")
-        return
-
-    clusters = get_clusters_by_version(version)
-    if not clusters:
-        await message.reply_text("Кластеров пока нет. Запусти /cluster")
-        return
-
-    lines = [f"📊 Кластеры (v{version}, {len(clusters)} шт.):\n"]
-    for i, c in enumerate(clusters[:limit], 1):
-        preview = c['preview'][:100] if c['preview'] else "—"
-        lines.append(f"{i}. #{c['id']} [{c['size']} фр.] {preview}")
-
-    await message.reply_text("\n".join(lines))
-
-
-async def chain_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /chain N [page] — show fragments of cluster #N."""
-    message = update.message
-    args = list(context.args) if context.args else []
-
-    if not args or not args[0].isdigit():
-        await message.reply_text("Использование: /chain <cluster_id> [страница]\nПример: /chain 12")
-        return
-
-    cluster_id = int(args[0])
-    page = 1
-    if len(args) >= 2 and args[1].isdigit():
-        page = max(1, int(args[1]))
-
-    per_page = 10
-    offset = (page - 1) * per_page
-
-    fragments = get_cluster_fragments(cluster_id, limit=per_page, offset=offset)
-    if not fragments:
-        await message.reply_text(f"Кластер #{cluster_id} не найден или пуст.")
-        return
-
-    # Get cluster info for header
-    version = get_latest_cluster_version()
-    clusters = get_clusters_by_version(version) if version else []
-    cluster_info = next((c for c in clusters if c['id'] == cluster_id), None)
-    total = cluster_info['size'] if cluster_info else len(fragments)
-
-    lines = [f"🔗 Кластер #{cluster_id} ({total} фрагментов):\n"]
-    for i, f in enumerate(fragments, offset + 1):
-        date = f['created_at'][:10] if f['created_at'] else "?"
-        text_preview = f['text'][:120].replace('\n', ' ')
-        if len(f['text']) > 120:
-            text_preview += "..."
-        link = _make_telegram_link(f.get('external_id'))
-
-        line = f"{i}. {date}\n   {text_preview}"
-        if link:
-            line += f"\n   {link}"
-        lines.append(line)
-
-    total_pages = (total + per_page - 1) // per_page
-    if total_pages > 1:
-        lines.append(f"\n[стр. {page}/{total_pages}, /chain {cluster_id} {page + 1} — след.]")
-
-    await message.reply_text("\n\n".join(lines), disable_web_page_preview=True)

@@ -46,7 +46,9 @@ print(f"{'='*60}\n")
 if result['clusters']:
     print("Top 20 clusters:")
     for i, c in enumerate(result['clusters'], 1):
-        print(f"  {i:2d}. [{c['size']:3d} frags] {c['preview'][:100]}")
+        name = c.get('name', '')
+        display = f"{name} | {c['preview'][:80]}" if name else c['preview'][:100]
+        print(f"  {i:2d}. [{c['size']:3d} frags] {display}")
 
 # Size distribution
 sizes = [c['size'] for c in result['clusters']]

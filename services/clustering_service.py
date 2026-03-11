@@ -11,6 +11,7 @@ import numpy as np
 import hdbscan
 import umap
 
+from services.transcription_service import get_openai_client
 from storage.fragments_db import (
     get_all_embedded_fragments,
     get_latest_cluster_version,
@@ -101,6 +102,16 @@ def run_clustering(min_cluster_size: int = 5, min_samples: int = 3) -> dict:
     # Sort by size DESC for saving
     clusters_data.sort(key=lambda c: c['size'], reverse=True)
 
+    # 6.5. Generate AI names
+    try:
+        names = generate_cluster_names(clusters_data, fragments)
+        for cd in clusters_data:
+            cd['name'] = names.get(cd['label'], '')
+    except Exception as e:
+        logger.warning(f"Failed to generate AI names: {e}")
+        for cd in clusters_data:
+            cd['name'] = ''
+
     # 7. Save to DB
     save_cluster_results(version, clusters_data)
     logger.info(f"Saved clustering v{version}: {n_clusters} clusters")
@@ -111,7 +122,7 @@ def run_clustering(min_cluster_size: int = 5, min_samples: int = 3) -> dict:
         'n_noise': n_noise,
         'n_total': n_total,
         'clusters': [
-            {'label': c['label'], 'size': c['size'], 'preview': c['preview']}
+            {'label': c['label'], 'size': c['size'], 'preview': c['preview'], 'name': c.get('name', '')}
             for c in clusters_data[:20]
         ],
     }
@@ -142,3 +153,64 @@ def _make_preview(cluster_fragments: list[dict]) -> str:
         preview = f"{top_tag}: {preview}"
 
     return preview
+
+
+def generate_cluster_names(clusters_data: list[dict], all_fragments: list[dict]) -> dict[int, str]:
+    """Generate short AI names for clusters via GPT-4o-mini.
+
+    Args:
+        clusters_data: [{label, size, preview, fragment_ids}, ...]
+        all_fragments: all fragments from get_all_embedded_fragments()
+
+    Returns:
+        {label: "AI name", ...}
+    """
+    client = get_openai_client()
+    frag_by_id = {f['id']: f for f in all_fragments}
+
+    names = {}
+    logger.info(f"Generating AI names for {len(clusters_data)} clusters...")
+
+    for i, cd in enumerate(clusters_data):
+        # Get cluster fragments sorted by date
+        frags = sorted(
+            [frag_by_id[fid] for fid in cd['fragment_ids'] if fid in frag_by_id],
+            key=lambda f: f['created_at'],
+        )
+        if not frags:
+            continue
+
+        # Take 5 representative samples spread across time
+        step = max(1, len(frags) // 5)
+        samples = [frags[j] for j in range(0, len(frags), step)][:5]
+
+        sample_texts = []
+        for f in samples:
+            tags = ' '.join(f.get('tags') or [])
+            text = f['text'][:200]
+            sample_texts.append(f"{tags} {text}")
+
+        prompt = (
+            "Дай короткое название (2-4 слова, на русском) для группы заметок. "
+            "Название должно отражать общую тему. Верни ТОЛЬКО название, без кавычек.\n\n"
+            + "\n---\n".join(sample_texts)
+        )
+
+        try:
+            resp = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=30,
+                temperature=0.3,
+            )
+            name = resp.choices[0].message.content.strip()
+            names[cd['label']] = name
+        except Exception as e:
+            logger.warning(f"AI name error for cluster {cd['label']}: {e}")
+            names[cd['label']] = ''
+
+        if (i + 1) % 10 == 0:
+            logger.info(f"  Named {i + 1}/{len(clusters_data)} clusters")
+
+    logger.info(f"Generated {sum(1 for v in names.values() if v)} AI names")
+    return names
