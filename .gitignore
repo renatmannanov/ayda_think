@@ -21,6 +21,12 @@ nul
 # Docs & task tracker (AI context, not needed in repo)
 docs/
 
+# Generated
+clusters.html
+
+# Claude Code
+.claude/
+
 # IDE
 .idea/
 .vscode/
