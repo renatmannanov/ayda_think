@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Thought App v6</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f5;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      padding: 20px;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    .app {
+      width: 100%;
+      max-width: 400px;
+      background: white;
+      min-height: 600px;
+      display: flex;
+      flex-direction: column;
+      border-left: 1px solid #e5e5e5;
+      border-right: 1px solid #e5e5e5;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      border-bottom: 1px solid #e5e5e5;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+    }
+
+    .header-center {
+      font-size: 13px;
+      color: #6b7280;
+    }
+
+    .header-right {
+      font-size: 14px;
+      color: #9ca3af;
+    }
+
+    .toggle {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 14px;
+    }
+
+    .toggle-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #9ca3af;
+      font-size: 14px;
+      transition: color 0.2s;
+    }
+
+    .toggle-btn.active {
+      color: #111827;
+      font-weight: 500;
+    }
+
+    .toggle-separator {
+      color: #d1d5db;
+    }
+
+    .back-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #6b7280;
+      font-size: 14px;
+    }
+
+    /* Body */
+    .body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 16px;
+      border-bottom: 1px solid #e5e5e5;
+      touch-action: pan-y;
+      transition: background 0.15s;
+    }
+
+    .content {
+      flex: 1;
+      font-size: 16px;
+      line-height: 1.6;
+      color: #1f2937;
+      white-space: pre-line;
+    }
+
+    .tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .tag {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+      color: #6b7280;
+      transition: color 0.2s;
+    }
+
+    .tag:hover {
+      color: #374151;
+    }
+
+    .tag.no-tag {
+      color: #d97706;
+    }
+
+    .meta {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 12px;
+    }
+
+    .date {
+      font-size: 14px;
+      color: #9ca3af;
+      cursor: pointer;
+    }
+
+    /* Actions */
+    .actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+    }
+
+    .actions-left {
+      display: flex;
+      gap: 12px;
+    }
+
+    .actions-center {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .actions-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .action-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 18px;
+      color: #6b7280;
+      transition: color 0.2s;
+      padding: 4px;
+    }
+
+    .action-btn:hover {
+      color: #374151;
+    }
+
+    .action-btn.focus-active {
+      color: #f97316;
+    }
+
+    .action-btn.done {
+      color: #16a34a;
+    }
+
+    .action-btn.disabled {
+      color: #d1d5db;
+      cursor: default;
+    }
+
+    .action-btn.active {
+      color: #111827;
+      font-weight: 500;
+    }
+
+    .actions-separator {
+      color: #e5e5e5;
+      font-size: 14px;
+    }
+
+    /* Connection type buttons */
+    .conn-btn {
+      background: #f3f4f6;
+      border: none;
+      border-radius: 12px;
+      padding: 4px 10px;
+      font-size: 13px;
+      color: #6b7280;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .conn-btn:hover {
+      background: #e5e7eb;
+    }
+
+    .conn-btn.active {
+      background: #111827;
+      color: white;
+    }
+
+    .conn-btn.disabled {
+      color: #d1d5db;
+      cursor: default;
+    }
+
+    /* Tree navigation */
+    .tree-nav {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 14px;
+    }
+
+    .tree-nav-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+      color: #6b7280;
+      padding: 2px 6px;
+      transition: color 0.2s;
+    }
+
+    .tree-nav-btn:hover {
+      color: #374151;
+    }
+
+    .tree-nav-btn.disabled {
+      color: #d1d5db;
+      cursor: default;
+    }
+
+    /* Empty state */
+    .empty-state {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 32px;
+    }
+
+    .empty-icon {
+      font-size: 32px;
+      margin-bottom: 12px;
+    }
+
+    .empty-title {
+      font-size: 16px;
+      color: #374151;
+      margin-bottom: 4px;
+    }
+
+    .empty-subtitle {
+      font-size: 14px;
+      color: #9ca3af;
+    }
+
+    /* Gesture hint */
+    .gesture-hint {
+      position: fixed;
+      bottom: 100px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 14px;
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+    }
+
+    .gesture-hint.visible {
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="header" id="header"></div>
+    <div class="body" id="body"></div>
+    <div class="actions" id="actions"></div>
+  </div>
+
+  <div class="gesture-hint" id="gestureHint"></div>
+
+  <script>
+    // Sample data with reply structure
+    const thoughts = [
+      {
+        id: 1,
+        text: "Думик\nЧем больше сможете взять с сообщества, чем больше готовы вложить.\nКак я могу быть полезен?",
+        tags: ["#wndr3", "#community"],
+        date: "14 Dec 2025",
+        timestamp: "2025-12-14T10:00:00",
+        status: "new",
+        focus: true,
+        reply_to_id: null  // корень
+      },
+      {
+        id: 2,
+        text: "Позиция в сообществе — это про вклад, не статус.",
+        tags: ["#wndr3", "#community"],
+        date: "12 Dec 2025",
+        timestamp: "2025-12-12T14:30:00",
+        status: "new",
+        focus: false,
+        reply_to_id: 1  // ответ на 1
+      },
+      {
+        id: 3,
+        text: "WNDR неделя 2: начинаю видеть паттерн в том как подхожу к новым сообществам",
+        tags: ["#wndr3"],
+        date: "10 Dec 2025",
+        timestamp: "2025-12-10T09:15:00",
+        status: "new",
+        focus: true,
+        reply_to_id: 2  // ответ на 2 (ветка C)
+      },
+      {
+        id: 4,
+        text: "А может дело не в сообществе, а в том что я ищу?",
+        tags: ["#wndr3"],
+        date: "9 Dec 2025",
+        timestamp: "2025-12-09T16:00:00",
+        status: "new",
+        focus: false,
+        reply_to_id: 2  // тоже ответ на 2 (ветка E)
+      },
+      {
+        id: 5,
+        text: "Глубже: ценность создаётся через последовательные действия.",
+        tags: ["#value"],
+        date: "8 Dec 2025",
+        timestamp: "2025-12-08T11:00:00",
+        status: "new",
+        focus: false,
+        reply_to_id: 3  // ответ на 3
+      },
+      {
+        id: 6,
+        text: "Просто мысль без категории",
+        tags: [],
+        date: "5 Dec 2025",
+        timestamp: "2025-12-05T08:30:00",
+        status: "new",
+        focus: false,
+        reply_to_id: null
+      },
+      {
+        id: 7,
+        text: "Growth mindset важен, но без системы действий — это wishful thinking",
+        tags: ["#growth"],
+        date: "1 Dec 2025",
+        timestamp: "2025-12-01T20:00:00",
+        status: "new",
+        focus: false,
+        reply_to_id: 4  // ответ на 4
+      }
+    ];
+
+    // State
+    let state = {
+      mode: 'all',  // 'all' | 'focus' | 'tag' | 'tags_related' | 'reply_related'
+      currentIndex: 0,
+      previousMode: 'all',
+      currentTag: null,
+      
+      // Tags related
+      relatedThoughts: [],
+      relatedIndex: 0,
+      parentThoughtId: null,
+      
+      // Reply related
+      replyChain: [],        // все записи в текущей цепочке
+      replyIndex: 0,         // текущая позиция в цепочке
+      replyBranch: null,     // текущая ветка (id родителя)
+      replyBranches: [],     // доступные ветки на текущем уровне
+      replyBranchIndex: 0    // индекс текущей ветки
+    };
+
+    // Helper functions
+    function getFilteredThoughts() {
+      switch (state.mode) {
+        case 'all':
+          return thoughts.filter(t => t.status === 'new');
+        case 'focus':
+          return thoughts.filter(t => t.status === 'new' && t.focus);
+        case 'tag':
+          return thoughts.filter(t => t.tags.includes(state.currentTag));
+        case 'tags_related':
+          return state.relatedThoughts;
+        case 'reply_related':
+          return state.replyChain;
+        default:
+          return thoughts;
+      }
+    }
+
+    function getRelatedByTags(thought) {
+      if (!thought.tags.length) return [];
+      return thoughts
+        .filter(t => t.id !== thought.id)
+        .map(t => ({
+          ...t,
+          commonTagsCount: t.tags.filter(tag => thought.tags.includes(tag)).length
+        }))
+        .filter(t => t.commonTagsCount > 0)
+        .sort((a, b) => {
+          if (b.commonTagsCount !== a.commonTagsCount) return b.commonTagsCount - a.commonTagsCount;
+          return new Date(b.timestamp) - new Date(a.timestamp);
+        });
+    }
+
+    function getReplies(thoughtId) {
+      return thoughts.filter(t => t.reply_to_id === thoughtId);
+    }
+
+    function getParent(thought) {
+      if (!thought.reply_to_id) return null;
+      return thoughts.find(t => t.id === thought.reply_to_id);
+    }
+
+    function getAncestors(thought) {
+      const ancestors = [];
+      let current = thought;
+      while (current.reply_to_id) {
+        const parent = getParent(current);
+        if (parent) {
+          ancestors.push(parent);
+          current = parent;
+        } else break;
+      }
+      return ancestors;
+    }
+
+    function getDescendants(thought, branch = null) {
+      const descendants = [];
+      let replies = getReplies(thought.id);
+      
+      // Если указана ветка, идём только по ней
+      if (branch !== null) {
+        replies = replies.filter(r => r.id === branch);
+      }
+      
+      if (replies.length > 0) {
+        const firstReply = replies[0];
+        descendants.push(firstReply);
+        descendants.push(...getDescendants(firstReply));
+      }
+      return descendants;
+    }
+
+    function buildReplyChain(thought) {
+      const ancestors = getAncestors(thought).reverse();
+      const descendants = getDescendants(thought);
+      return [...ancestors, thought, ...descendants];
+    }
+
+    function getReplyStats(thought) {
+      const ancestors = getAncestors(thought);
+      const replies = getReplies(thought.id);
+      const descendants = getDescendants(thought);
+      
+      return {
+        up: ancestors.length,
+        down: descendants.length + replies.length,
+        branches: replies.length > 1 ? replies.length : 0,
+        totalReplies: countAllReplies(thought)
+      };
+    }
+
+    function countAllReplies(thought) {
+      const ancestors = getAncestors(thought);
+      const allInChain = new Set();
+      
+      // Найти корень
+      const root = ancestors.length > 0 ? ancestors[ancestors.length - 1] : thought;
+      
+      // Рекурсивно посчитать все записи в дереве
+      function countTree(t) {
+        allInChain.add(t.id);
+        getReplies(t.id).forEach(reply => countTree(reply));
+      }
+      countTree(root);
+      
+      return allInChain.size;
+    }
+
+    function getSiblings(thought) {
+      if (!thought.reply_to_id) return [];
+      return thoughts.filter(t => t.reply_to_id === thought.reply_to_id && t.id !== thought.id);
+    }
+
+    // Render functions
+    function renderHeader() {
+      const header = document.getElementById('header');
+      const filtered = getFilteredThoughts();
+      
+      if (state.mode === 'tags_related') {
+        header.innerHTML = `
+          <div class="header-left">
+            <button class="back-btn" onclick="exitRelatedMode()">← К записи</button>
+          </div>
+          <div class="header-right">связь ${state.relatedIndex + 1}/${state.relatedThoughts.length}</div>
+        `;
+      } else if (state.mode === 'reply_related') {
+        const current = state.replyChain[state.replyIndex];
+        const stats = getReplyStats(current);
+        const chainLength = state.replyChain.length;
+        
+        // Определяем название ветки
+        let branchName = '';
+        if (state.replyBranches.length > 0) {
+          branchName = `ветка ${state.replyBranchIndex + 1}`;
+        }
+        
+        header.innerHTML = `
+          <div class="header-left">
+            <button class="back-btn" onclick="exitRelatedMode()">← К записи</button>
+          </div>
+          <div class="header-center">${branchName}</div>
+          <div class="header-right">связь ${state.replyIndex + 1}/${chainLength}</div>
+        `;
+      } else if (state.mode === 'tag') {
+        header.innerHTML = `
+          <div class="header-left">
+            <button class="back-btn" onclick="goBack()">← Назад</button>
+          </div>
+          <div class="header-center">${state.currentTag}</div>
+          <div class="header-right">${filtered.length > 0 ? `${state.currentIndex + 1}/${filtered.length}` : '0/0'}</div>
+        `;
+      } else {
+        header.innerHTML = `
+          <div class="header-left">
+            <div class="toggle">
+              <button class="toggle-btn ${state.mode === 'all' ? 'active' : ''}" onclick="setMode('all')">Все</button>
+              <span class="toggle-separator">/</span>
+              <button class="toggle-btn ${state.mode === 'focus' ? 'active' : ''}" onclick="setMode('focus')">Фокус</button>
+            </div>
+          </div>
+          <div class="header-right">${filtered.length > 0 ? `${state.currentIndex + 1}/${filtered.length}` : '0/0'}</div>
+        `;
+      }
+    }
+
+    function renderBody() {
+      const body = document.getElementById('body');
+      const filtered = getFilteredThoughts();
+      
+      let thought;
+      if (state.mode === 'tags_related') {
+        thought = filtered[state.relatedIndex];
+      } else if (state.mode === 'reply_related') {
+        thought = state.replyChain[state.replyIndex];
+      } else {
+        thought = filtered[state.currentIndex];
+      }
+
+      if (!thought) {
+        let icon = '✓', title = 'Всё обработано', subtitle = 'Новые мысли появятся когда напишешь в канал';
+        if (state.mode === 'focus') {
+          icon = '🎯'; title = 'Нет мыслей в фокусе'; subtitle = 'Нажми 🎯 чтобы добавить';
+        }
+        body.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">${icon}</div>
+            <div class="empty-title">${title}</div>
+            <div class="empty-subtitle">${subtitle}</div>
+          </div>
+        `;
+        return;
+      }
+
+      const tagsHtml = thought.tags.length > 0
+        ? thought.tags.map(tag => `<button class="tag" onclick="filterByTag('${tag}')">${tag}</button>`).join('')
+        : '<button class="tag no-tag">⚠️ без тега</button>';
+
+      body.innerHTML = `
+        <div class="content">${thought.text}</div>
+        <div class="tags">${tagsHtml}</div>
+        <div class="meta">
+          <span class="date">${thought.date}</span>
+        </div>
+      `;
+    }
+
+    function renderActions() {
+      const actions = document.getElementById('actions');
+      const filtered = getFilteredThoughts();
+      
+      let thought;
+      if (state.mode === 'tags_related') {
+        thought = filtered[state.relatedIndex];
+      } else if (state.mode === 'reply_related') {
+        thought = state.replyChain[state.replyIndex];
+      } else {
+        thought = filtered[state.currentIndex];
+      }
+
+      if (!thought) {
+        actions.innerHTML = '';
+        return;
+      }
+
+      const tagsCount = getRelatedByTags(thought).length;
+      const replyStats = getReplyStats(thought);
+
+      if (state.mode === 'tags_related') {
+        // Режим связей по тегам
+        actions.innerHTML = `
+          <div class="actions-left">
+            <button class="action-btn ${thought.focus ? 'focus-active' : ''}" onclick="toggleFocus()">🎯</button>
+            <button class="action-btn done" onclick="markDone()">✓</button>
+          </div>
+          <div class="actions-center">
+            <button class="action-btn" onclick="nextTagRelated()">↓</button>
+          </div>
+          <div class="actions-right">
+            <button class="action-btn" onclick="exitRelatedMode()">←</button>
+            <span class="actions-separator">|</span>
+            <button class="action-btn" onclick="openChannel()">↗</button>
+          </div>
+        `;
+      } else if (state.mode === 'reply_related') {
+        // Режим связей по реплаям
+        const stats = getReplyStats(thought);
+        const siblings = getSiblings(thought);
+        const branchCount = siblings.length + 1;
+        
+        const upBtn = stats.up > 0 
+          ? `<button class="tree-nav-btn" onclick="replyUp()">↑${stats.up}</button>`
+          : `<span class="tree-nav-btn disabled">—</span>`;
+        
+        const downCount = getReplies(thought.id).length;
+        const downBtn = downCount > 0
+          ? `<button class="tree-nav-btn" onclick="replyDown()">↓${downCount}</button>`
+          : `<span class="tree-nav-btn disabled">—</span>`;
+        
+        const branchBtn = branchCount > 1
+          ? `<button class="tree-nav-btn" onclick="replyBranch()">↔${branchCount}</button>`
+          : '';
+
+        actions.innerHTML = `
+          <div class="actions-left">
+            <button class="action-btn ${thought.focus ? 'focus-active' : ''}" onclick="toggleFocus()">🎯</button>
+            <button class="action-btn done" onclick="markDone()">✓</button>
+          </div>
+          <div class="actions-center">
+            <div class="tree-nav">
+              ${upBtn}
+              ${downBtn}
+              ${branchBtn}
+            </div>
+          </div>
+          <div class="actions-right">
+            <button class="action-btn" onclick="exitRelatedMode()">←</button>
+            <span class="actions-separator">|</span>
+            <button class="action-btn" onclick="openChannel()">↗</button>
+          </div>
+        `;
+      } else {
+        // Основной режим
+        const tagsBtn = tagsCount > 0
+          ? `<button class="conn-btn" onclick="enterTagsRelated()">#${tagsCount}</button>`
+          : `<button class="conn-btn disabled">#0</button>`;
+        
+        const replyBtn = replyStats.totalReplies > 1
+          ? `<button class="conn-btn" onclick="enterReplyRelated()">↩${replyStats.totalReplies}</button>`
+          : `<button class="conn-btn disabled">↩0</button>`;
+
+        actions.innerHTML = `
+          <div class="actions-left">
+            <button class="action-btn ${thought.focus ? 'focus-active' : ''}" onclick="toggleFocus()">🎯</button>
+            <button class="action-btn done" onclick="markDone()">✓</button>
+          </div>
+          <div class="actions-center">
+            ${tagsBtn}
+            ${replyBtn}
+          </div>
+          <div class="actions-right">
+            <button class="action-btn" onclick="prevThought()">←</button>
+            <span class="actions-separator">|</span>
+            <button class="action-btn" onclick="nextThought()">→</button>
+            <span class="actions-separator">|</span>
+            <button class="action-btn" onclick="openChannel()">↗</button>
+          </div>
+        `;
+      }
+    }
+
+    function render() {
+      renderHeader();
+      renderBody();
+      renderActions();
+    }
+
+    // Actions
+    function setMode(mode) {
+      state.mode = mode;
+      state.currentIndex = 0;
+      render();
+    }
+
+    function filterByTag(tag) {
+      state.previousMode = state.mode;
+      state.mode = 'tag';
+      state.currentTag = tag;
+      state.currentIndex = 0;
+      render();
+    }
+
+    function goBack() {
+      state.mode = state.previousMode;
+      state.currentTag = null;
+      state.currentIndex = 0;
+      render();
+    }
+
+    function toggleFocus() {
+      let thought;
+      if (state.mode === 'tags_related') {
+        thought = state.relatedThoughts[state.relatedIndex];
+      } else if (state.mode === 'reply_related') {
+        thought = state.replyChain[state.replyIndex];
+      } else {
+        thought = getFilteredThoughts()[state.currentIndex];
+      }
+      if (!thought) return;
+      
+      const original = thoughts.find(t => t.id === thought.id);
+      if (original) original.focus = !original.focus;
+      render();
+    }
+
+    function markDone() {
+      let thought;
+      if (state.mode === 'tags_related') {
+        thought = state.relatedThoughts[state.relatedIndex];
+      } else if (state.mode === 'reply_related') {
+        thought = state.replyChain[state.replyIndex];
+      } else {
+        thought = getFilteredThoughts()[state.currentIndex];
+      }
+      if (!thought) return;
+      
+      const original = thoughts.find(t => t.id === thought.id);
+      if (original) original.status = 'done';
+      
+      // Переход к следующей
+      if (state.mode === 'tags_related') {
+        nextTagRelated();
+      } else if (state.mode === 'reply_related') {
+        // Остаёмся, но обновляем цепочку
+        render();
+      } else {
+        const newFiltered = getFilteredThoughts();
+        if (state.currentIndex >= newFiltered.length) {
+          state.currentIndex = Math.max(0, newFiltered.length - 1);
+        }
+        render();
+      }
+    }
+
+    function nextThought() {
+      const filtered = getFilteredThoughts();
+      if (filtered.length === 0) return;
+      state.currentIndex = (state.currentIndex + 1) % filtered.length;
+      render();
+    }
+
+    function prevThought() {
+      const filtered = getFilteredThoughts();
+      if (filtered.length === 0) return;
+      state.currentIndex = (state.currentIndex - 1 + filtered.length) % filtered.length;
+      render();
+    }
+
+    // Tags related
+    function enterTagsRelated() {
+      const thought = getFilteredThoughts()[state.currentIndex];
+      if (!thought) return;
+      
+      const related = getRelatedByTags(thought);
+      if (related.length === 0) return;
+      
+      state.parentThoughtId = thought.id;
+      state.relatedThoughts = related;
+      state.relatedIndex = 0;
+      state.previousMode = state.mode;
+      state.mode = 'tags_related';
+      render();
+    }
+
+    function nextTagRelated() {
+      if (state.relatedThoughts.length === 0) return;
+      state.relatedIndex = (state.relatedIndex + 1) % state.relatedThoughts.length;
+      render();
+    }
+
+    // Reply related
+    function enterReplyRelated() {
+      const thought = getFilteredThoughts()[state.currentIndex];
+      if (!thought) return;
+      
+      state.replyChain = buildReplyChain(thought);
+      state.replyIndex = state.replyChain.findIndex(t => t.id === thought.id);
+      state.previousMode = state.mode;
+      state.mode = 'reply_related';
+      
+      // Определяем ветки
+      updateBranches();
+      render();
+    }
+
+    function updateBranches() {
+      const current = state.replyChain[state.replyIndex];
+      if (!current) return;
+      
+      const siblings = getSiblings(current);
+      state.replyBranches = [current, ...siblings];
+      state.replyBranchIndex = 0;
+    }
+
+    function replyUp() {
+      const current = state.replyChain[state.replyIndex];
+      const parent = getParent(current);
+      if (!parent) return;
+      
+      const parentIndex = state.replyChain.findIndex(t => t.id === parent.id);
+      if (parentIndex >= 0) {
+        state.replyIndex = parentIndex;
+        updateBranches();
+        render();
+      }
+    }
+
+    function replyDown() {
+      const current = state.replyChain[state.replyIndex];
+      const replies = getReplies(current.id);
+      if (replies.length === 0) return;
+      
+      // Идём в первый ответ
+      const firstReply = replies[0];
+      let replyIndex = state.replyChain.findIndex(t => t.id === firstReply.id);
+      
+      if (replyIndex < 0) {
+        // Перестроить цепочку с учётом этой ветки
+        state.replyChain = buildReplyChain(firstReply);
+        replyIndex = state.replyChain.findIndex(t => t.id === firstReply.id);
+      }
+      
+      state.replyIndex = replyIndex;
+      updateBranches();
+      render();
+    }
+
+    function replyBranch() {
+      if (state.replyBranches.length <= 1) return;
+      
+      // Переключаем на следующую ветку
+      state.replyBranchIndex = (state.replyBranchIndex + 1) % state.replyBranches.length;
+      const newBranch = state.replyBranches[state.replyBranchIndex];
+      
+      // Перестроить цепочку от этой ветки
+      state.replyChain = buildReplyChain(newBranch);
+      state.replyIndex = state.replyChain.findIndex(t => t.id === newBranch.id);
+      
+      render();
+    }
+
+    function exitRelatedMode() {
+      state.mode = state.previousMode;
+      state.relatedThoughts = [];
+      state.relatedIndex = 0;
+      state.replyChain = [];
+      state.replyIndex = 0;
+      render();
+    }
+
+    function openChannel() {
+      alert('Opens Telegram deep link');
+    }
+
+    // Touch gestures
+    let touchStartX = 0, touchStartY = 0, lastTap = 0;
+    const bodyEl = document.getElementById('body');
+
+    bodyEl.addEventListener('touchstart', e => {
+      touchStartX = e.changedTouches[0].screenX;
+      touchStartY = e.changedTouches[0].screenY;
+    }, { passive: true });
+
+    bodyEl.addEventListener('touchend', e => {
+      const diffX = e.changedTouches[0].screenX - touchStartX;
+      const diffY = e.changedTouches[0].screenY - touchStartY;
+      
+      if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 50) {
+        if (diffX < 0) {
+          if (state.mode === 'tags_related') nextTagRelated();
+          else if (state.mode === 'reply_related') replyDown();
+          else nextThought();
+        } else {
+          if (state.mode === 'tags_related' || state.mode === 'reply_related') exitRelatedMode();
+          else prevThought();
+        }
+      }
+      
+      // Double tap
+      const now = new Date().getTime();
+      if (now - lastTap < 300) {
+        toggleFocus();
+        bodyEl.style.background = '#fef3c7';
+        setTimeout(() => bodyEl.style.background = 'white', 150);
+      }
+      lastTap = now;
+    }, { passive: false });
+
+    render();
+  </script>
+</body>
+</html>

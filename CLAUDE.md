@@ -20,8 +20,9 @@ Telegram-бот для сохранения заметок в Google Sheets (mul
 | Frontend (Mini App) | `webapp/` |
 | Pydantic models | `schemas.py` |
 | Runtime data (JSON) | `data/` |
-| Documentation | `docs/` |
-| Tasks | `docs/task_tracker/` |
+| Documentation | `internal/docs/` |
+| Tasks | `task_tracker/` |
+| Domain model | `internal/docs/knowledges/domain_model.md` |
 
 ## Tech Stack
 
@@ -32,7 +33,8 @@ Telegram-бот для сохранения заметок в Google Sheets (mul
 | Google Sheets | gspread + google-auth |
 | Database | SQLite (local) / PostgreSQL (Railway) via SQLAlchemy |
 | Vector search | pgvector + OpenAI text-embedding-3-small |
-| Clustering | scikit-learn (DBSCAN) |
+| Clustering | UMAP + HDBSCAN |
+| Synthesis | OpenAI GPT-4o-mini |
 | Voice | OpenAI Whisper + GPT-4o-mini |
 | Frontend | Vanilla JS (ES6 modules) |
 | Config | python-dotenv |
@@ -99,7 +101,7 @@ ayda_think/
 │   ├── note_handler.py      # Save text/voice/forward notes
 │   ├── voice_handler.py     # Download + transcribe audio
 │   ├── tag_handler.py       # /tag command
-│   ├── brain_handler.py     # /search, /normalize, /cluster commands
+│   ├── brain_handler.py     # /search, /normalize, /cluster, /artifact commands
 │   ├── channel_integration.py   # Channel → user DM sync
 │   ├── forward_utils.py     # Extract forward metadata
 │   └── utils.py             # User/spreadsheet lookups
@@ -108,12 +110,14 @@ ayda_think/
 │   ├── note_service.py      # Notes CRUD for API
 │   ├── transcription_service.py  # Whisper + GPT
 │   ├── normalizer_service.py    # Embeddings, language detection, dedup
+│   ├── clustering_service.py    # UMAP + HDBSCAN clustering + AI names
+│   ├── synthesis_service.py     # GPT synthesis (artifacts)
 │   └── relation_service.py  # Tag-based relations + reply chains
 │
 ├── storage/
 │   ├── base.py              # Abstract interface
 │   ├── db.py                # SQLite/PostgreSQL (User, ChannelMapping, ChannelMessageMapping)
-│   ├── fragments_db.py      # Fragment/Cluster/FragmentCluster models + CRUD (pgvector)
+│   ├── fragments_db.py      # Fragment/Cluster/FragmentCluster/Artifact models + CRUD (pgvector)
 │   └── google_sheets.py     # Google Sheets read/write
 │
 ├── webapp/
@@ -128,10 +132,15 @@ ayda_think/
 ├── data/                    # Runtime data (gitignored, NOT used for persistent state)
 │   └── (legacy JSON files removed — mappings now in DB)
 │
-└── docs/                    # Documentation (gitignored)
-    ├── ai_settings/         # AI context, specs
-    ├── task_tracker/        # Tasks (to_do/, done/)
-    └── claudes_to_choose/   # CLAUDE.md examples from other projects
+├── task_tracker/            # Tasks (tracked in git)
+│   ├── todo/
+│   ├── in_progress/
+│   ├── done/
+│   └── backlog/
+└── internal/                # Personal docs & AI context (gitignored)
+    └── docs/
+        ├── ai_settings/     # AI context, specs
+        └── knowledges/      # Domain model, research
 ```
 
 ## Google Sheets Schema (11 columns)
@@ -169,7 +178,9 @@ ayda_think/
 | `/tag #a #b` | Add tags to replied message | All users |
 | `/link_channel` | Link channel to user | All users |
 | `/search <query>` | Semantic search across fragments | All users |
+| `/cluster [min_size] [min_samples]` | Run UMAP+HDBSCAN clustering | Admin only |
 | `/normalize` | Run normalization on unembedded fragments | Admin only |
+| `/artifact <тема>` | GPT synthesis on a topic (evolution, connections) | All users |
 
 ## Critical Rules
 
@@ -201,11 +212,22 @@ except Exception as e:
 from storage.db import save_channel_mapping, get_channel_user
 ```
 
-## Навигация по docs/
+## Доменная модель
 
-- `docs/` — читать свободно
-- `docs/task_tracker/to_do/` — текущие задачи, читать свободно
-- `docs/task_tracker/done/` — НЕ читать без запроса (экономия контекста)
+Полная модель: `docs/knowledges/domain_model.md`. **Читать перед работой с бизнес-логикой.**
+
+Ключевые сущности:
+- **Fragment** — атомарная мысль/заметка. Три типа связей: Reply (явная), Tag (явная), Semantic (неявная)
+- **Cluster** — группа семантически близких фрагментов (UMAP + HDBSCAN). Версионируется
+- **Artifact** — результат GPT-синтеза. Анализ эволюции мысли, не пересказ. Привязан к fragment_ids + опционально cluster_id
+
+При добавлении/изменении сущностей — **обновить `internal/docs/knowledges/domain_model.md`**.
+
+## Навигация
+
+- `internal/docs/` — читать свободно
+- `task_tracker/todo/` — текущие задачи, читать свободно
+- `task_tracker/done/` — НЕ читать без запроса (экономия контекста)
 
 ## Выполнение планов
 

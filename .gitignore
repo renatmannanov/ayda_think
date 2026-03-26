@@ -18,8 +18,8 @@ google_token.json
 data/
 nul
 
-# Docs & task tracker (AI context, not needed in repo)
-docs/
+# Personal docs & AI context (not needed in repo)
+internal/
 
 # Generated
 clusters.html
