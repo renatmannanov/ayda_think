@@ -4,7 +4,7 @@ Uses pgvector for embedding storage and similarity search when available.
 """
 
 from sqlalchemy import (
-    Column, Integer, String, Text, Boolean, DateTime, ForeignKey,
+    Column, Integer, BigInteger, String, Text, Boolean, DateTime, ForeignKey,
     UniqueConstraint, func, or_, cast
 )
 from sqlalchemy.dialects.postgresql import JSONB, ARRAY
@@ -50,6 +50,9 @@ class Fragment(Base):
     language = Column(String(5), nullable=True)           # ru / en / mixed
     is_duplicate = Column(Boolean, default=False)
     is_outdated = Column(Boolean, default=False)
+    sender_id = Column(BigInteger, nullable=True)          # Telegram user ID of author
+    channel_id = Column(BigInteger, nullable=True)         # Telegram chat ID (-100 format)
+    message_thread_id = Column(BigInteger, nullable=True)  # Forum topic ID (1=General)
     if _pgvector_import_ok:
         embedding = Column(Vector(1536), nullable=True)
 
