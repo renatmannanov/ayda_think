@@ -40,10 +40,13 @@ class ChannelMessageMapping(Base):
     cloned_id = Column(BigInteger, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-# Database setup
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./ayda_think.db")
+# Database setup — PostgreSQL only (local via docker-compose, prod via Railway)
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql://postgres:localpass@localhost:5433/ayda_think",
+)
 
-# Fix for Render's postgres:// URL (SQLAlchemy requires postgresql://)
+# Fix for Render/Railway's postgres:// URL (SQLAlchemy requires postgresql://)
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
@@ -58,17 +61,15 @@ def init_db():
     """Initialize database tables. Enables pgvector if available."""
     global pgvector_available
 
-    # Try to enable pgvector extension (PostgreSQL only)
-    if not DATABASE_URL.startswith("sqlite"):
-        try:
-            with engine.connect() as conn:
-                conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-                conn.commit()
-            pgvector_available = True
-            logging.info("pgvector extension enabled")
-        except Exception as e:
-            pgvector_available = False
-            logging.warning(f"pgvector not available, embedding features disabled: {e}")
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+            conn.commit()
+        pgvector_available = True
+        logging.info("pgvector extension enabled")
+    except Exception as e:
+        pgvector_available = False
+        logging.warning(f"pgvector not available, embedding features disabled: {e}")
 
     # Import fragment models so they are registered with Base.metadata
     # Must happen AFTER pgvector_available is set
@@ -77,29 +78,53 @@ def init_db():
     Base.metadata.create_all(bind=engine)
 
     # Add 'name' column to clusters table if it doesn't exist
-    if not DATABASE_URL.startswith("sqlite"):
-        try:
-            with engine.connect() as conn:
-                conn.execute(text(
-                    "ALTER TABLE clusters ADD COLUMN IF NOT EXISTS name TEXT"
-                ))
-                conn.commit()
-        except Exception as e:
-            logging.warning(f"Could not add 'name' column to clusters: {e}")
+    try:
+        with engine.connect() as conn:
+            conn.execute(text(
+                "ALTER TABLE clusters ADD COLUMN IF NOT EXISTS name TEXT"
+            ))
+            conn.commit()
+    except Exception as e:
+        logging.warning(f"Could not add 'name' column to clusters: {e}")
+
+    # Add source/origin columns to fragments (sender_id, channel_id, message_thread_id)
+    # Owned by ayda_think; consumed by telegram-gather API clients for filtering.
+    try:
+        with engine.connect() as conn:
+            conn.execute(text(
+                "ALTER TABLE fragments "
+                "ADD COLUMN IF NOT EXISTS sender_id BIGINT, "
+                "ADD COLUMN IF NOT EXISTS channel_id BIGINT, "
+                "ADD COLUMN IF NOT EXISTS message_thread_id BIGINT"
+            ))
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS idx_fragments_channel_id "
+                "ON fragments (channel_id)"
+            ))
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS idx_fragments_sender_id "
+                "ON fragments (sender_id)"
+            ))
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS idx_fragments_channel_thread "
+                "ON fragments (channel_id, message_thread_id)"
+            ))
+            conn.commit()
+    except Exception as e:
+        logging.warning(f"Could not add sender/channel columns to fragments: {e}")
 
     # Fix NULL booleans: set default values for is_duplicate/is_outdated
-    if not DATABASE_URL.startswith("sqlite"):
-        try:
-            with engine.connect() as conn:
-                conn.execute(text(
-                    "UPDATE fragments SET is_duplicate = false WHERE is_duplicate IS NULL"
-                ))
-                conn.execute(text(
-                    "UPDATE fragments SET is_outdated = false WHERE is_outdated IS NULL"
-                ))
-                conn.commit()
-        except Exception as e:
-            logging.warning(f"Could not fix NULL booleans: {e}")
+    try:
+        with engine.connect() as conn:
+            conn.execute(text(
+                "UPDATE fragments SET is_duplicate = false WHERE is_duplicate IS NULL"
+            ))
+            conn.execute(text(
+                "UPDATE fragments SET is_outdated = false WHERE is_outdated IS NULL"
+            ))
+            conn.commit()
+    except Exception as e:
+        logging.warning(f"Could not fix NULL booleans: {e}")
 
     # Create HNSW index for embeddings (only if pgvector is available)
     if pgvector_available:
